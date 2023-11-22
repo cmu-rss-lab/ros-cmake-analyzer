@@ -29,11 +29,15 @@ select = [
     "ALL",  # includes all rules (including new ones)
 ]
 extend-ignore = [
-    "D203",  # one-blank-line-before-class
-    "D213",  # multi-line-summary-second-line
-    "D104",  # missing docstring in public package
-    "D103",  # missing docstring in public function
-    "D100",  # missing docstring in public module
+    "D203",     # one-blank-line-before-class
+    "D213",     # multi-line-summary-second-line
+    "D104",     # missing docstring in public package
+    "D103",     # missing docstring in public function
+    "D102",     # missing docstring in public method
+    "D101",     # missing docstring in public class
+    "D100",     # missing docstring in public module
+    "ANN101",   # missing type annotation for self in method
+    "ANN102",   # missing type annotation for cls in classmethod
 ]
 
 [build-system]

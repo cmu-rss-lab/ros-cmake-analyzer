@@ -1,0 +1,10 @@
+{
+  "name": "poetry3-poetry-pyenv",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "PYTHON_VERSION": "3.12"
+    },
+  },
+  "postCreateCommand": "poetry install --with dev"
+}

@@ -29,7 +29,7 @@ class Package:
 
         with package_xml.open() as f:
             contents = f.read()
-        return parse_package_string(contents, filename=package_xml)
+        return parse_package_string(contents, filename=package_xml)  # type: ignore
 
     @classmethod
     def from_dir(cls, directory: Path) -> "Package":

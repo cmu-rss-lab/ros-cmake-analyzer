@@ -194,7 +194,7 @@ class CMakeExtractor(abc.ABC):
     def _info_from_cmakelists(self, package: Package) -> CMakeInfo:
         with (package.path / "CMakelists.txt").open() as f:
             contents = "".join(f.readlines())
-        env = {}
+        env: dict[str, str] = {}
         info = self._process_cmake_contents(contents, package, env)
         nodelet_libraries = self.get_nodelet_entrypoints(package)
         # Add in classname as a name that can be referenced in loading nodelets
@@ -558,9 +558,9 @@ class CMakeExtractor(abc.ABC):
             package: Path,
             cmake_env: dict[str, str],
     ) -> Path | None:
-        real_filename = filename
-        if real_filename in self._files_generated_by_cmake:
+        if filename in self._files_generated_by_cmake:
             return None
+        real_filename = Path(filename)
         if "cwd" in cmake_env:
             real_filename = Path(cmake_env["cwd"]) / filename
         if not (package / real_filename).is_file():

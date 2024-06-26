@@ -4,7 +4,7 @@ import abc
 import enum
 import re
 import typing as t
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from cmake.parser import ParserContext
@@ -65,21 +65,6 @@ class CMakeBinaryTarget(CMakeTarget):
             return "main"
         return None
 
-
-@dataclass(frozen=True)
-class CMakeLibraryTarget(CMakeBinaryTarget):
-    # TODO: This is a hack to allow the entrypoint to be set later
-    _entrypoint: set[str] = field(default_factory=set)  # This is a hack to allow this field to be set later
-
-    @property
-    def entrypoint(self) -> str | None:
-        if len(self._entrypoint) == 1:
-            return next(iter(self._entrypoint))
-        return None
-
-    def add_entrypoint(self, entrypoint: str) -> None:
-        self._entrypoint.add(entrypoint)
-
     def to_dict(self) -> dict[str, t.Any]:
         d = super().to_dict()
         if self.entrypoint:
@@ -87,15 +72,32 @@ class CMakeLibraryTarget(CMakeBinaryTarget):
         return d
 
     @classmethod
-    def from_dict(cls, info: dict[str, t.Any]) -> CMakeLibraryTarget:
-        return CMakeLibraryTarget(info["name"],
-                                  SourceLanguage(info["language"]),
-                                  set(info["sources"]),
-                                  set(info["path_restrictions"]),
-                                  info["cmakelists_file"],
-                                  info["cmakelists_line"],
-                                  info.get("entrypoint", None),
-                                  )
+    def from_dict(cls, info: dict[str, t.Any]) -> CMakeBinaryTarget:
+        return CMakeBinaryTarget(info["name"],
+                                 SourceLanguage(info["language"]),
+                                 set(info["sources"]),
+                                 set(info["path_restrictions"]),
+                                 info["cmakelists_file"],
+                                 info["cmakelists_line"],
+                                 info.get("entrypoint", None))
+
+
+@dataclass(frozen=True)
+class CMakeLibraryTarget(CMakeBinaryTarget):
+    _entrypoint: str
+
+
+@dataclass(frozen=True)
+class IncompleteCMakeLibraryTarget(CMakeTarget):
+
+    def complete(self, entrypoint: str) -> CMakeLibraryTarget:
+        return CMakeLibraryTarget(name=self.name,
+                                  language=self.language,
+                                  sources=self.sources,
+                                  restrict_to_paths=self.restrict_to_paths,
+                                  cmakelists_file=self.cmakelists_file,
+                                  cmakelists_line=self.cmakelists_line,
+                                  _entrypoint=entrypoint)
 
 
 @dataclass(frozen=True)
@@ -220,8 +222,11 @@ class CMakeExtractor(abc.ABC):
                                f"CMakeLists.txt.")
             else:
                 target = info.targets[nodelet]
-                assert isinstance(target, CMakeLibraryTarget)
-                target._entrypoint.add(library.entrypoint)
+                if isinstance(target, IncompleteCMakeLibraryTarget):
+                    info.targets[nodelet] = target.complete(entrypoint=library.entrypoint)
+                else:
+                    logger.warning(f"'{nodelet} target '{target.name}' "
+                                   f"trying to set entrypoint on {type(target)}'")
         return info
 
     def _process_cmake_contents(  # noqa: PLR0915
@@ -402,11 +407,7 @@ class CMakeExtractor(abc.ABC):
         path = package.path / cmake_env["cwd"] if "cwd" in cmake_env else package.path
         matches = []
         for arg in args[1:]:
-            glob_find = f"/usr/bin/python -c \"import glob; print(glob.glob('{arg}'))\""
-            logger.debug(f"Executing find command:  \"{glob_find}\" in '{path}")
-            finds_py = self._app_instance.shell.check_output(args=glob_find, cwd=path, text=True)  # TODO Help!
-            logger.debug(f"Found {finds_py}")
-            finds = [self._trim_and_unquote(f) for f in re.split(r",\|\[|]", finds_py) if f.strip()]
+            finds = [self._trim_and_unquote(str(f)) for f in path.rglob(arg)]
             logger.debug(f"Found the following matches to {arg} in {path}: {finds}")
             matches.extend(finds)
         if opts["RELATIVE"]:
@@ -477,7 +478,7 @@ class CMakeExtractor(abc.ABC):
             if real_src:
                 sources.add(str(real_src))
         logger.debug(f"Adding C++ library {name}")
-        executables[name] = CMakeLibraryTarget(
+        executables[name] = IncompleteCMakeLibraryTarget(
             name,
             SourceLanguage.CXX,
             sources,

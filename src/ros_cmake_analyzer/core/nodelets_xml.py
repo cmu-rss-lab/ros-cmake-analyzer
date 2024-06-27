@@ -27,11 +27,11 @@ class NodeletLibrary:
 
 @dataclass
 class NodeletsInfo:
-    libraries: set["NodeletLibrary"]
+    libraries: list["NodeletLibrary"]
 
     @classmethod
     def from_nodelet_xml(cls, contents: str) -> "NodeletsInfo":
-        libraries: set["NodeletLibrary"] = set()
+        libraries: list["NodeletLibrary"] = []
         contents = "<root>\n" + contents + "\n</root>"
         tree = dom.parseString(contents)
         root = get_xml_nodes_by_name("root", tree)[0]
@@ -50,10 +50,10 @@ class NodeletsInfo:
                 assert isinstance(class_dom, dom.Element)
                 name = class_dom.getAttribute("name")
                 type_ = class_dom.getAttribute("type")
-                libraries.add(NodeletLibrary(path=path,
-                                             name=name,
-                                             type_=type_,
-                                             ))
+                libraries.append(NodeletLibrary(path=path,
+                                                name=name,
+                                                type_=type_,
+                                                ))
         return NodeletsInfo(libraries=libraries)
 
 

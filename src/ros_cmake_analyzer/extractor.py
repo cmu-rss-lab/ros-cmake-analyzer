@@ -12,12 +12,11 @@ from loguru import logger
 from .cmake.parser import ParserContext
 from .cmake.parser import argparse as cmake_argparse
 from .core.nodelets_xml import NodeletsInfo
+from .core.package import Package
 from .utils import key_val_list_to_dict
 
-__all__ = ("CMakeExtractor", "CMakeInfo")
+__all__ = ("CMakeExtractor", "CMakeInfo", "cmake_command")
 
-if t.TYPE_CHECKING:
-    from core.package import Package
 
 DUMMY_VALUE = "__dummy_property_value__"  # A dummy value used as a stand in for properties we don't need
 
@@ -141,13 +140,43 @@ class NodeletLibrary:
         return self.type_ + "::onInit"
 
 
-class CMakeExtractor(abc.ABC):
+class CommandHandlerType(type, abc.ABC):
+    def __init__(cls, name: str, bases: t.Any, attrs: dict[str, t.Any]):
+        cls._handlers = {}
+        for name, method in attrs.items():
+            if hasattr(method, "command"):
+                if hasattr(method, "commands"):
+                    for command in method.commands:
+                        cls._handlers[command] = method
+                else:
+                    cls._handlers[name] = method
+
+
+def cmake_command(arg: t.Callable[[dict[str, t.Any], list[str]], None] | list[str]) -> t.Callable[[dict[str, t.Any], list[str]], None]:
+    if callable(arg):
+        arg.command = True
+        return arg
+
+    def c2(fn: t.Callable[[dict[str, t.Any], list[str]], None]) -> t.Callable[[dict[str, t.Any], list[str]], None]:
+        fn.command = True
+        fn.commands = arg
+        return fn
+    return c2
+
+
+class CMakeExtractor(metaclass=CommandHandlerType):
 
     _files_generated_by_cmake: t.ClassVar[set[str]] = set()
 
     def __init__(self, package_dir: str | Path) -> None:
         package_path = Path(package_dir) if isinstance(package_dir, str) else package_dir
         self.package = Package.from_dir(package_path)
+
+    def command_for(self, command: str) -> t.Callable[[dict[str, t.Any], list[str]], None] | None:
+        for h in type(self).__mro__:
+            if hasattr(h, "_handlers") and command in h._handlers:
+                return h._handlers[command]
+        return None
 
     @abc.abstractmethod
     def package_paths(self) -> set[Path]:
@@ -201,8 +230,8 @@ class CMakeExtractor(abc.ABC):
             return entrypoints
         return {}
 
-    def _info_from_cmakelists(self, package: Package) -> CMakeInfo:
-        with (package.path / "CMakelists.txt").open() as f:
+    def _info_from_cmakelists(self) -> CMakeInfo:
+        with (self.package.path / "CMakelists.txt").open() as f:
             contents = "".join(f.readlines())
         env: dict[str, str] = {"cmakelists": "CMakeLists.txt"}
         info = self._process_cmake_contents(contents, env)
@@ -225,7 +254,7 @@ class CMakeExtractor(abc.ABC):
         for nodelet, library in nodelet_libraries.items():
             if nodelet not in info.targets:
                 logger.warning(f"info.targets={info.targets}")
-                logger.warning(f"Package {package.name}: '{nodelet}' "
+                logger.warning(f"Package {self.package.name}: '{nodelet}' "
                                f"is referenced in nodelet_plugins.xml but not in "
                                f"CMakeLists.txt.")
             else:
@@ -237,7 +266,10 @@ class CMakeExtractor(abc.ABC):
                                    f"trying to set entrypoint on {type(target)}'")
         return info
 
-    def _process_cmake_contents(  # noqa: PLR0915
+    def _cmake_argparse(self, args, opts):   # noqa: ANN202, ANN001
+        return cmake_argparse(args, opts)
+
+    def _process_cmake_contents(
             self,
             file_contents: str,
             cmake_env: dict[str, str],
@@ -262,101 +294,57 @@ class CMakeExtractor(abc.ABC):
             Information about the targets in CMakeLists.txt
 
         """
-        executables: dict[str, CMakeTarget] = {}
         context = ParserContext().parse(file_contents, skip_callable=False, var=cmake_env)
+        self.executables = {}
         for cmd, raw_args, _arg_tokens, (_fname, line, _column) in context:
             cmake_env["cmakelists_line"] = line
             try:
                 cmd = cmd.lower()    # noqa: PLW2901
-                if cmd == "project":
-                    opts, args = cmake_argparse(raw_args, {})
-                    cmake_env["PROJECT_NAME"] = args[0]
-                    logger.info(f"Setting PROJECT_NAME={args[0]}")
-                elif cmd == "configure_file":
-                    self._process_configure_file(cmake_env, raw_args)
-                elif cmd == "aux_source_directory":
-                    self.__process_aux_source_directory(cmake_env, raw_args)
-                elif cmd == "set_target_properties":
-                    opts, args = cmake_argparse(raw_args, {"PROPERTIES": "*"})
-                    properties = key_val_list_to_dict(opts.get("PROPERTIES", []))
-                    if "OUTPUT_NAME" in properties:
-                        var_pattern = re.compile(r"([^$]*)\${([^}]*)}(.*)")
-                        var_match = var_pattern.match(args[0])
-                        if var_match:
-                            args[0] = var_match.group(1) + cmake_env[var_match.group(2)] + var_match.group(3)
-                        if args[0] in executables:
-                            executables[properties["OUTPUT_NAME"]] = executables[args[0]]
-                            del executables[args[0]]
-                        else:
-                            logger.error(f"{args[0]} is not in the list of targets")
-                elif cmd == "set":
-                    opts, args = cmake_argparse(
-                        raw_args,
-                        {"PARENT_SCOPE": "-", "FORCE": "-", "CACHE": "*"},
-                    )
-                    cmake_env[args[0]] = ";".join(args[1:])
-                elif cmd == "unset":
-                    opts, args = cmake_argparse(raw_args, {"CACHE": "-"})
-                    cmake_env[args[0]] = ""
-                elif cmd == "file":
-                    logger.debug(f"Processing file directive: {raw_args}")
-                    opts, args = cmake_argparse(raw_args, {"FOLLOW_SYMLINKS": "-",
-                                                           "LIST_DIRECTORIES": "?",
-                                                           "RELATIVE": "?",
-                                                           "GLOB_RECURSE": "-",
-                                                           "GLOB": "-",
-                                                           })
-                    self.__process_file_directive(args, cmake_env, opts)
-                elif cmd == "list":
-                    logger.info(f"Processing list directive: {raw_args}")
-                    opts, args = cmake_argparse(raw_args, {"APPEND": "-"})
-                    self.__process_list_directive(args, cmake_env, opts)
-                elif cmd in ("add_executable", "cuda_add_executable"):
-                    opts, args = cmake_argparse(
-                        raw_args,
-                        {"EXCLUDE_FROM_ALL": "-"},
-                    )
-                    if not opts["EXCLUDE_FROM_ALL"]:
-                        self.__process_add_executable(
-                            args,
-                            cmake_env,
-                            executables)
-                elif cmd == "catkin_install_python":
-                    self.__process_python_executables(
-                        raw_args,
-                        cmake_env,
-                        executables)
-                elif cmd in ("add_library", "cuda_add_library"):
-                    opts, args = cmake_argparse(
-                        raw_args,
-                        {"SHARED": "-",
-                         "STATIC": "-",
-                         "MODULE": "-",
-                         "EXCLUDE_FROM_ALL": "-",
-                         },
-                    )
-                    if not opts["EXCLUDE_FROM_ALL"]:
-                        self.__process_add_library(
-                            args,
-                            cmake_env,
-                            executables)
-                elif cmd == "add_subdirectory":
-                    opts, args = cmake_argparse(
-                        raw_args,
-                        {"EXCLUDE_FROM_ALL": "-"},
-                    )
-                    if not opts["EXCLUDE_FROM_ALL"]:
-                        executables = self.__process_add_subdirectory(
-                            args,
-                            cmake_env,
-                            executables)
+                command = self.command_for(cmd)
+                if command:
+                    command(self, cmake_env, raw_args)
             except Exception:
                 logger.error(f"Error processing {cmd}({raw_args}) in "
                              f"{cmake_env['cmakelists'] if 'cmakelists' in cmake_env else 'unknown'}")
                 raise
-        return CMakeInfo(executables, self._files_generated_by_cmake)
+        return CMakeInfo(self.executables, self._files_generated_by_cmake)
 
-    def __process_aux_source_directory(
+    @cmake_command
+    def project(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(raw_args, {})
+        cmake_env["PROJECT_NAME"] = args[0]
+        logger.info(f"Setting PROJECT_NAME={args[0]}")
+
+    @cmake_command
+    def set_target_properties(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(raw_args, {"PROPERTIES": "*"})
+        properties = key_val_list_to_dict(opts.get("PROPERTIES", []))
+        if "OUTPUT_NAME" in properties:
+            var_pattern = re.compile(r"([^$]*)\${([^}]*)}(.*)")
+            var_match = var_pattern.match(args[0])
+            if var_match:
+                args[0] = var_match.group(1) + cmake_env[var_match.group(2)] + var_match.group(3)
+            if args[0] in self.executables:
+                self.executables[properties["OUTPUT_NAME"]] = self.executables[args[0]]
+                del self.executables[args[0]]
+            else:
+                logger.error(f"{args[0]} is not in the list of targets")
+
+    @cmake_command
+    def set(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"PARENT_SCOPE": "-", "FORCE": "-", "CACHE": "*"},
+        )
+        cmake_env[args[0]] = ";".join(args[1:])
+
+    @cmake_command
+    def unset(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(raw_args, {"CACHE": "-"})
+        cmake_env[args[0]] = ""
+
+    @cmake_command
+    def aux_source_directory(
             self,
             cmake_env: dict[str, t.Any],
             raw_args: list[str],
@@ -371,12 +359,14 @@ class CMakeExtractor(abc.ABC):
         values = ";".join(str(dir_name / f) for f in path.glob("*"))
         cmake_env[var_name] = values
 
-    def __process_list_directive(
+    @cmake_command(["list"])
+    def list_directive(
             self,
-            args: list[str],
             cmake_env: dict[str, t.Any],
-            opts: dict[str, t.Any],
+            raw_args: list[str],
     ) -> None:
+        logger.info(f"Processing list directive: {raw_args}")
+        opts, args = self._cmake_argparse(raw_args, {"APPEND": "-"})
         if not opts["APPEND"]:
             logger.warning(f"Cannot process list({args[0]} ...)")
             return
@@ -395,12 +385,19 @@ class CMakeExtractor(abc.ABC):
         else:
             logger.error(f"Don't know how to append_to append append_to type: {type(append_to)}")
 
-    def __process_file_directive(
+    @cmake_command
+    def file(
             self,
-            args: list[str],
             cmake_env: dict[str, t.Any],
-            opts: dict[str, t.Any],
+            raw_args: list[str],
     ) -> None:
+        logger.debug(f"Processing file directive: {raw_args}")
+        opts, args = self._cmake_argparse(raw_args, {"FOLLOW_SYMLINKS": "-",
+                                               "LIST_DIRECTORIES": "?",
+                                               "RELATIVE": "?",
+                                               "GLOB_RECURSE": "-",
+                                               "GLOB": "-",
+                                               })
         if not opts["GLOB_RECURSE"] and not opts["GLOB"]:
             logger.warning(f"Cannot process file({args[0]} ...")
             return
@@ -417,12 +414,18 @@ class CMakeExtractor(abc.ABC):
         cmake_env[args[0]] = ";".join(matches)
         logger.debug(f"Set {args[0]} to {cmake_env[args[0]]}")
 
+    @cmake_command
     def __process_add_subdirectory(
             self,
-            args: list[str],
             cmake_env: dict[str, str],
-            executables: dict[str, CMakeTarget],
-    ) -> dict[str, CMakeTarget]:
+            raw_args: list[str],
+    ) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"EXCLUDE_FROM_ALL": "-"},
+        )
+        if opts["EXCLUDE_FROM_ALL"]:
+            return
         new_env = cmake_env.copy()
         new_env["cwd"] = str(Path(cmake_env.get("cwd", ".")) / args[0])
         new_env["PROJECT_SOURCE_DIR"] = str(Path(cmake_env.get("CMAKE_SOURCE_DIR", ".")) / args[0])
@@ -433,17 +436,21 @@ class CMakeExtractor(abc.ABC):
         with cmakelists_path.open() as f:
             contents = f.read()
         included_pacakge_instances = self._process_cmake_contents(contents, new_env)
-        return {
-            **executables,
-            **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets},
-        }
+        self.executables.update(
+            **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets})
 
-    def __process_add_executable(
+    @cmake_command(["add_executable", "cuda_add_executable"])
+    def add_executable(
             self,
-            args: list[str],
             cmake_env: dict[str, t.Any],
-            executables: dict[str, CMakeTarget],
+            raw_args: list[str],
     ) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"EXCLUDE_FROM_ALL": "-"},
+        )
+        if opts["EXCLUDE_FROM_ALL"]:
+            return
         name = args[0]
         sources: set[Path] = set()
         for source in args[1:]:
@@ -453,7 +460,7 @@ class CMakeExtractor(abc.ABC):
             else:
                 logger.warning(f"'{source} did not resolve to a real file.")
         logger.debug(f"Adding C++ sources for {name}")
-        executables[name] = CMakeBinaryTarget(
+        self.executables[name] = CMakeBinaryTarget(
             name=name,
             language=SourceLanguage.CXX,
             sources=sources,
@@ -462,12 +469,22 @@ class CMakeExtractor(abc.ABC):
             cmakelists_line=cmake_env["cmakelists_line"],
         )
 
-    def __process_add_library(
+    @cmake_command(["add_library", "cuda_add_library"])
+    def add_library(
             self,
-            args: list[str],
             cmake_env: dict[str, t.Any],
-            executables: dict[str, CMakeTarget],
+            raw_args: list[str],
     ) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"SHARED": "-",
+             "STATIC": "-",
+             "MODULE": "-",
+             "EXCLUDE_FROM_ALL": "-",
+             },
+        )
+        if opts["EXCLUDE_FROM_ALL"]:
+            return
         name = args[0]
         sources: set[Path] = set()
         for source in args[1:]:
@@ -475,7 +492,7 @@ class CMakeExtractor(abc.ABC):
             if real_src:
                 sources.add(real_src)
         logger.debug(f"Adding C++ library {name}")
-        executables[name] = IncompleteCMakeLibraryTarget(
+        self.executables[name] = IncompleteCMakeLibraryTarget(
             name,
             SourceLanguage.CXX,
             sources,
@@ -484,45 +501,13 @@ class CMakeExtractor(abc.ABC):
             cmakelists_line=cmake_env["cmakelists_line"],
         )
 
-    def __process_python_executables(
-            self,
-            args: list[str],
-            cmake_env: dict[str, t.Any],
-            executables: dict[str, CMakeTarget],
-    ) -> None:
-        opts, args = cmake_argparse(
-            args,
-            {"PROGRAMS": "*", "DESTINATION": "*"},
-        )
-        if "PROGRAMS" not in opts:
-            raise ValueError("PROGRAMS not specifie in catkin_install_python")
-
-        for program in opts["PROGRAMS"]:
-            # http://docs.ros.org/en/jade/api/catkin/html/howto/format2/installing_python.html
-            # Convention is that ros python nodes are in nodes/ directory.
-            # All others are in scripts/. So just include python installs
-            # that are in nodes/
-            if program.startswith("nodes/"):
-                name = Path(program).stem
-                sources: set[Path] = set()
-                source = self._resolve_to_real_file(program, self.package.path, cmake_env)
-                if source:
-                    sources.add(source)
-                logger.debug(f"Adding Python sources for {name}")
-                executables[name] = CMakeTarget(name,
-                                                SourceLanguage.PYTHON,
-                                                sources,
-                                                set(),
-                                                cmakelists_file=cmake_env["cmakelists"],
-                                                cmakelists_line=cmake_env["cmakelists_line"],
-                                                )
-
-    def _process_configure_file(
+    @cmake_command
+    def configure_file(
             self,
             cmake_env: dict[str, t.Any],
             rawargs: list[str],
     ) -> None:
-        _opts, args = cmake_argparse(rawargs, {"NO_SOURCE_PERMISSIONS": "-",
+        _opts, args = self._cmake_argparse(rawargs, {"NO_SOURCE_PERMISSIONS": "-",
                                                "USE_SOURCE_PERMISSIONS": "-",
                                                "COPY_ONLY": "-",
                                                "ESCAPE_QUOTES": "-",

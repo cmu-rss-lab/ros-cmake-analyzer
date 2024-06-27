@@ -1,1 +1,1 @@
-from extractor import CMakeExtractor, CMakeInfo  # noqa: F401
+from .extractor import CMakeExtractor, CMakeInfo  # noqa: F401

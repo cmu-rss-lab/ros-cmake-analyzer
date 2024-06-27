@@ -4,7 +4,9 @@ from pathlib import Path
 
 from loguru import logger
 
-from .extractor import cmake_command, CMakeExtractor, CMakeInfo, CMakeTarget, DUMMY_VALUE, SourceLanguage
+from .decorator import cmake_command
+from .extractor import CMakeExtractor
+from .model import CMakeInfo, CMakeTarget, DUMMY_VALUE, SourceLanguage
 
 
 class ROS1CMakeExtractor(CMakeExtractor):
@@ -78,7 +80,7 @@ class ROS1CMakeExtractor(CMakeExtractor):
             opts, args = self._cmake_argparse(
                 raw_args,
                 {"PROGRAMS": "*", "DESTINATION": "*"},
-            )
+            )  # type: ignore
             if "PROGRAMS" not in opts:
                 raise ValueError("PROGRAMS not specifie in catkin_install_python")
 

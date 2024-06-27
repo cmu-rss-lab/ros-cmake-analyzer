@@ -2,8 +2,9 @@
 import typing as t
 from pathlib import Path
 
-from .core.package import Package
-from .extractor import CMakeExtractor, CMakeInfo, DUMMY_VALUE
+from loguru import logger
+
+from .extractor import cmake_command, CMakeExtractor, CMakeInfo, CMakeTarget, DUMMY_VALUE, SourceLanguage
 
 
 class ROS1CMakeExtractor(CMakeExtractor):
@@ -71,3 +72,32 @@ class ROS1CMakeExtractor(CMakeExtractor):
                 return workspace_path
             workspace_path = workspace_path.parent
         return workspace_path
+
+    @cmake_command
+    def catkin_install_python(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+            opts, args = self._cmake_argparse(
+                raw_args,
+                {"PROGRAMS": "*", "DESTINATION": "*"},
+            )
+            if "PROGRAMS" not in opts:
+                raise ValueError("PROGRAMS not specifie in catkin_install_python")
+
+            for program in opts["PROGRAMS"]:
+                # http://docs.ros.org/en/jade/api/catkin/html/howto/format2/installing_python.html
+                # Convention is that ros python nodes are in nodes/ directory.
+                # All others are in scripts/. So just include python installs
+                # that are in nodes/
+                if program.startswith("nodes/"):
+                    name = Path(program).stem
+                    sources: set[Path] = set()
+                    source = self._resolve_to_real_file(program, self.package.path, cmake_env)
+                    if source:
+                        sources.add(source)
+                    logger.debug(f"Adding Python sources for {name}")
+                    self.executables[name] = CMakeTarget(name,
+                                                         SourceLanguage.PYTHON,
+                                                         sources,
+                                                         set(),
+                                                         cmakelists_file=cmake_env["cmakelists"],
+                                                         cmakelists_line=cmake_env["cmakelists_line"],
+                                                         )

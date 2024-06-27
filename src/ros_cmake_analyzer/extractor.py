@@ -7,11 +7,14 @@ import typing as t
 from dataclasses import dataclass
 from pathlib import Path
 
-from cmake.parser import ParserContext
-from cmake.parser import argparse as cmake_argparse
-from core.nodelets_xml import NodeletsInfo
 from loguru import logger
-from utils import key_val_list_to_dict
+
+from .cmake.parser import ParserContext
+from .cmake.parser import argparse as cmake_argparse
+from .core.nodelets_xml import NodeletsInfo
+from .utils import key_val_list_to_dict
+
+__all__ = ("CMakeExtractor", "CMakeInfo")
 
 if t.TYPE_CHECKING:
     from core.package import Package
@@ -28,8 +31,8 @@ class SourceLanguage(enum.Enum):
 class CMakeTarget:
     name: str
     language: SourceLanguage
-    sources: set[str]
-    restrict_to_paths: set[str]
+    sources: set[Path]
+    restrict_to_paths: set[Path]
     cmakelists_file: str
     cmakelists_line: int
 
@@ -139,21 +142,26 @@ class NodeletLibrary:
 
 
 class CMakeExtractor(abc.ABC):
-    _files_generated_by_cmake: set[str] = set()
+
+    _files_generated_by_cmake: t.ClassVar[set[str]] = set()
+
+    def __init__(self, package_dir: str | Path) -> None:
+        package_path = Path(package_dir) if isinstance(package_dir, str) else package_dir
+        self.package = Package.from_dir(package_path)
 
     @abc.abstractmethod
-    def package_paths(self, package: Package) -> set[str]:
+    def package_paths(self) -> set[Path]:
         ...
 
     @abc.abstractmethod
-    def get_cmake_info(self, package: Package) -> CMakeInfo:
+    def get_cmake_info(self) -> CMakeInfo:
         ...
 
     @abc.abstractmethod
-    def _get_global_cmake_variables(self, package: Package) -> dict[str, str]:
+    def _get_global_cmake_variables(self) -> dict[str, str]:
         ...
 
-    def get_nodelet_entrypoints(self, package: Package) -> t.Mapping[str, NodeletLibrary]:
+    def get_nodelet_entrypoints(self) -> t.Mapping[str, NodeletLibrary]:
         """Returns the potential nodelet entrypoints and classname for the package.
 
         Parameters
@@ -167,16 +175,16 @@ class CMakeExtractor(abc.ABC):
             A mapping of nodelet names to NodeletInfo
 
         """
-        nodelets_xml_path = package.path / "nodelet_plugins.xml"
+        nodelets_xml_path = self.package.path / "nodelet_plugins.xml"
         if not nodelets_xml_path.exists():
             # Read from package
-            defn = package.definition
+            defn = self.package.definition
             for export in defn.exports:
                 logger.debug("Looking for export in pacakge.xml")
                 if export.tagname == "nodelet" and "plugin" in export.attributes:
                     plugin = export.attributes["plugin"]
                     plugin = plugin.replace("${prefix}", "")
-                    nodelets_xml_path = package.path / plugin
+                    nodelets_xml_path = self.package.path / plugin
                     if nodelets_xml_path.exists():
                         logger.debug(f"Reading plugin information from {nodelets_xml_path!s}")
                         break
@@ -196,9 +204,9 @@ class CMakeExtractor(abc.ABC):
     def _info_from_cmakelists(self, package: Package) -> CMakeInfo:
         with (package.path / "CMakelists.txt").open() as f:
             contents = "".join(f.readlines())
-        env: dict[str, str] = {}
-        info = self._process_cmake_contents(contents, package, env)
-        nodelet_libraries = self.get_nodelet_entrypoints(package)
+        env: dict[str, str] = {"cmakelists": "CMakeLists.txt"}
+        info = self._process_cmake_contents(contents, env)
+        nodelet_libraries = self.get_nodelet_entrypoints()
         # Add in classname as a name that can be referenced in loading nodelets
         for nodelet, library in nodelet_libraries.items():
             if nodelet in info.targets:
@@ -232,7 +240,6 @@ class CMakeExtractor(abc.ABC):
     def _process_cmake_contents(  # noqa: PLR0915
             self,
             file_contents: str,
-            package: Package,
             cmake_env: dict[str, str],
     ) -> CMakeInfo:
         """Processes the contents of a CMakeLists.txt file.
@@ -268,7 +275,7 @@ class CMakeExtractor(abc.ABC):
                 elif cmd == "configure_file":
                     self._process_configure_file(cmake_env, raw_args)
                 elif cmd == "aux_source_directory":
-                    self.__process_aux_source_directory(cmake_env, package, raw_args)
+                    self.__process_aux_source_directory(cmake_env, raw_args)
                 elif cmd == "set_target_properties":
                     opts, args = cmake_argparse(raw_args, {"PROPERTIES": "*"})
                     properties = key_val_list_to_dict(opts.get("PROPERTIES", []))
@@ -299,7 +306,7 @@ class CMakeExtractor(abc.ABC):
                                                            "GLOB_RECURSE": "-",
                                                            "GLOB": "-",
                                                            })
-                    self.__process_file_directive(args, cmake_env, opts, package)
+                    self.__process_file_directive(args, cmake_env, opts)
                 elif cmd == "list":
                     logger.info(f"Processing list directive: {raw_args}")
                     opts, args = cmake_argparse(raw_args, {"APPEND": "-"})
@@ -313,15 +320,12 @@ class CMakeExtractor(abc.ABC):
                         self.__process_add_executable(
                             args,
                             cmake_env,
-                            executables,
-                            package)
+                            executables)
                 elif cmd == "catkin_install_python":
                     self.__process_python_executables(
                         raw_args,
                         cmake_env,
-                        executables,
-                        package,
-                    )
+                        executables)
                 elif cmd in ("add_library", "cuda_add_library"):
                     opts, args = cmake_argparse(
                         raw_args,
@@ -335,8 +339,7 @@ class CMakeExtractor(abc.ABC):
                         self.__process_add_library(
                             args,
                             cmake_env,
-                            executables,
-                            package)
+                            executables)
                 elif cmd == "add_subdirectory":
                     opts, args = cmake_argparse(
                         raw_args,
@@ -346,8 +349,7 @@ class CMakeExtractor(abc.ABC):
                         executables = self.__process_add_subdirectory(
                             args,
                             cmake_env,
-                            executables,
-                            package)
+                            executables)
             except Exception:
                 logger.error(f"Error processing {cmd}({raw_args}) in "
                              f"{cmake_env['cmakelists'] if 'cmakelists' in cmake_env else 'unknown'}")
@@ -357,7 +359,6 @@ class CMakeExtractor(abc.ABC):
     def __process_aux_source_directory(
             self,
             cmake_env: dict[str, t.Any],
-            package: Package,
             raw_args: list[str],
     ) -> None:
         # aux_source_directory(<dir> <var>)
@@ -366,7 +367,7 @@ class CMakeExtractor(abc.ABC):
         # https://cmake.org/cmake/help/latest/command/aux_source_directory.html
         var_name = raw_args[1]
         dir_name = Path(raw_args[0])
-        path = package.path / cmake_env["cwd"] / dir_name if "cwd" in cmake_env else package.path / dir_name
+        path = self.package.path / cmake_env["cwd"] / dir_name if "cwd" in cmake_env else self.package.path / dir_name
         values = ";".join(str(dir_name / f) for f in path.glob("*"))
         cmake_env[var_name] = values
 
@@ -399,12 +400,11 @@ class CMakeExtractor(abc.ABC):
             args: list[str],
             cmake_env: dict[str, t.Any],
             opts: dict[str, t.Any],
-            package: Package,
     ) -> None:
         if not opts["GLOB_RECURSE"] and not opts["GLOB"]:
             logger.warning(f"Cannot process file({args[0]} ...")
             return
-        path = package.path / cmake_env["cwd"] if "cwd" in cmake_env else package.path
+        path = self.package.path / cmake_env["cwd"] if "cwd" in cmake_env else self.package.path
         matches = []
         for arg in args[1:]:
             finds = [self._trim_and_unquote(str(f)) for f in path.rglob(arg)]
@@ -412,7 +412,7 @@ class CMakeExtractor(abc.ABC):
             matches.extend(finds)
         if opts["RELATIVE"]:
             # convert path to be relative
-            relative = package / opts["RELATIVE"]
+            relative = self.package.path / opts["RELATIVE"]
             matches.extend([str((path / m).relative_to(relative)) for m in matches])
         cmake_env[args[0]] = ";".join(matches)
         logger.debug(f"Set {args[0]} to {cmake_env[args[0]]}")
@@ -422,18 +422,17 @@ class CMakeExtractor(abc.ABC):
             args: list[str],
             cmake_env: dict[str, str],
             executables: dict[str, CMakeTarget],
-            package: Package,
     ) -> dict[str, CMakeTarget]:
         new_env = cmake_env.copy()
         new_env["cwd"] = str(Path(cmake_env.get("cwd", ".")) / args[0])
         new_env["PROJECT_SOURCE_DIR"] = str(Path(cmake_env.get("CMAKE_SOURCE_DIR", ".")) / args[0])
         new_env["CMAKE_CURRENT_SOURCE_DIR"] = new_env["cwd"]
-        cmakelists_path = package.path / new_env["cwd"] / "CMakeLists.txt"
+        cmakelists_path = self.package.path / new_env["cwd"] / "CMakeLists.txt"
         new_env["cmakelists"] = str(cmakelists_path)
         logger.info(f"Processing {cmakelists_path!s}")
         with cmakelists_path.open() as f:
             contents = f.read()
-        included_pacakge_instances = self._process_cmake_contents(contents, package, new_env)
+        included_pacakge_instances = self._process_cmake_contents(contents, new_env)
         return {
             **executables,
             **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets},
@@ -444,14 +443,13 @@ class CMakeExtractor(abc.ABC):
             args: list[str],
             cmake_env: dict[str, t.Any],
             executables: dict[str, CMakeTarget],
-            package: Package,
     ) -> None:
         name = args[0]
-        sources: set[str] = set()
+        sources: set[Path] = set()
         for source in args[1:]:
-            real_src = self._resolve_to_real_file(source, package.path, cmake_env)
+            real_src = self._resolve_to_real_file(source, self.package.path, cmake_env)
             if real_src:
-                sources.add(str(real_src))
+                sources.add(real_src)
             else:
                 logger.warning(f"'{source} did not resolve to a real file.")
         logger.debug(f"Adding C++ sources for {name}")
@@ -459,7 +457,7 @@ class CMakeExtractor(abc.ABC):
             name=name,
             language=SourceLanguage.CXX,
             sources=sources,
-            restrict_to_paths=self.package_paths(package),
+            restrict_to_paths=self.package_paths(),
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=cmake_env["cmakelists_line"],
         )
@@ -469,20 +467,19 @@ class CMakeExtractor(abc.ABC):
             args: list[str],
             cmake_env: dict[str, t.Any],
             executables: dict[str, CMakeTarget],
-            package: Package,
     ) -> None:
         name = args[0]
-        sources: set[str] = set()
+        sources: set[Path] = set()
         for source in args[1:]:
-            real_src = self._resolve_to_real_file(source, package.path, cmake_env)
+            real_src = self._resolve_to_real_file(source, self.package.path, cmake_env)
             if real_src:
-                sources.add(str(real_src))
+                sources.add(real_src)
         logger.debug(f"Adding C++ library {name}")
         executables[name] = IncompleteCMakeLibraryTarget(
             name,
             SourceLanguage.CXX,
             sources,
-            self.package_paths(package),
+            self.package_paths(),
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=cmake_env["cmakelists_line"],
         )
@@ -492,7 +489,6 @@ class CMakeExtractor(abc.ABC):
             args: list[str],
             cmake_env: dict[str, t.Any],
             executables: dict[str, CMakeTarget],
-            package: Package,
     ) -> None:
         opts, args = cmake_argparse(
             args,
@@ -508,10 +504,10 @@ class CMakeExtractor(abc.ABC):
             # that are in nodes/
             if program.startswith("nodes/"):
                 name = Path(program).stem
-                sources: set[str] = set()
-                source = self._resolve_to_real_file(program, package.path, cmake_env)
+                sources: set[Path] = set()
+                source = self._resolve_to_real_file(program, self.package.path, cmake_env)
                 if source:
-                    sources.add(str(source))
+                    sources.add(source)
                 logger.debug(f"Adding Python sources for {name}")
                 executables[name] = CMakeTarget(name,
                                                 SourceLanguage.PYTHON,
@@ -570,7 +566,7 @@ class CMakeExtractor(abc.ABC):
                 all_files = (package / parent).glob("*")
                 matching_files = [f for f in all_files if str(f).startswith(str(real_filename))]
                 if len(matching_files) != 1:
-                    raise ValueError(f"Only one file should match '{real_filename!s}'. "
+                    raise ValueError(f"Only one file should match '{real_filename!s}'. "  # noqa: TRY301
                                      f"Currently {len(matching_files)} files do: {matching_files}")
                 real_filename = parent / matching_files[0]
             except ValueError:

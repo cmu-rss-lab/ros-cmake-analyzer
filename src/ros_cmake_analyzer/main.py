@@ -15,15 +15,14 @@ def main(arguments: list[str]) -> None:
     args = parser.parse_args(arguments)
 
     if args.ros == "ros1":
-        cmake = ROS1CMakeExtractor()
+        cmake = ROS1CMakeExtractor(args.dir)
     else:
         raise ValueError("ROS2 is not supported yet")
 
-    package = Package.from_dir(Path(args.dir))
-    info = cmake.get_cmake_info(package)
+    info = cmake.get_cmake_info()
     for target in info.targets:
         logger.info(f"Target '{target}' has sources: {info.targets[target]}")
-    logger.info("DOne")
+    logger.info("Done")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-import xml.dom.minidom as dom
 from dataclasses import dataclass
 
+import defusedxml as dom
 from loguru import logger
 
 

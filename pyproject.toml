@@ -2,8 +2,13 @@
 name = "ros-cmake-analyzer"
 version = "0.1.0"
 description = "A static analysis tool for CMakeLists.txt files in ROS packages."
-authors = ["Chris Timperley <christimperley@googlemail.com>"]
+authors = [
+    "Chris Timperley <christimperley@googlemail.com>",
+    "Bradley Schmerl <schmerl@cs.cmu.edu>"]
 readme = "README.md"
+packages = [
+    {include = "ros_cmake_analyzer", from="src"}
+]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -11,6 +16,7 @@ flake8-comprehensions = "^3.14.0"
 flake8-use-fstring = "^1.4"
 loguru = "^0.7.2"
 pyparsing = "^3.1.1"
+defusedxml = "^0.7.1"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.7.0"

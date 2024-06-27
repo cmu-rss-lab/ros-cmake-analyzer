@@ -9,7 +9,6 @@ class CommandHandlerType(type, abc.ABC):
 
     Stores the handlers either by the method name, or by the names specified in 'commands' attribute.
     """
-
     def __init__(cls, name: str, bases: t.Any, attrs: dict[str, t.Any]) -> None:  # noqa: ARG003, ANN401
         super().__init__(cls)
         cls._handlers = {}
@@ -22,13 +21,10 @@ class CommandHandlerType(type, abc.ABC):
                     cls._handlers[name] = method
 
 
-Self = t.TypeVar("Self", bound="CommandHandlerType")
+CMakeFunctionT = t.Callable[[t.Any, dict[str, t.Any], list[str]], None]  # TODO: Self?
 
 
-CMakeFunctionT = t.Callable[[Self, dict[str, t.Any], list[str]], None]
-
-
-def cmake_command(arg: CMakeFunctionT[Self] | list[str]) -> CMakeFunctionT[Self]:
+def cmake_command(arg: CMakeFunctionT | list[str]) -> CMakeFunctionT:
     """Decorator for cmake directive handlers.
 
     Methods in a class are registered as cmake directives either by decorating them by @cmake_command or by adding
@@ -42,12 +38,11 @@ def cmake_command(arg: CMakeFunctionT[Self] | list[str]) -> CMakeFunctionT[Self]
         The registered method
     """
     if callable(arg):
-        arg.__setattr__("command", True)
+        arg.command = True
         return arg
 
-    def c2(fn: CMakeFunctionT[Self]) -> CMakeFunctionT[Self]:
-        arg.__setattr__("command", True)
-        arg.__setattr__("commands", arg)
+    def c2(fn: CMakeFunctionT) -> CMakeFunctionT:
+        fn.command = True
+        fn.commands = arg
         return fn
-
     return c2  # type: ignore

@@ -1,8 +1,6 @@
 import sys
 from argparse import ArgumentParser
-from pathlib import Path
 
-from core.package import Package
 from loguru import logger
 from ros1 import ROS1CMakeExtractor
 

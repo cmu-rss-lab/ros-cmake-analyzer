@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from defusedxml import ElementTree as ET
+from defusedxml import ElementTree as ET  # noqa: N817
 from loguru import logger
 
 

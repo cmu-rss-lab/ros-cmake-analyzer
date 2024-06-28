@@ -87,37 +87,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         with (self.package.path / "CMakelists.txt").open() as f:
             contents = "".join(f.readlines())
         env: dict[str, str] = {"cmakelists": "CMakeLists.txt"}
-        info = self._process_cmake_contents(contents, env)
-        nodelet_libraries = self.get_nodelet_entrypoints()
-        # Add in classname as a name that can be referenced in loading nodelets
-        for nodelet, library in nodelet_libraries.items():
-            if nodelet in info.targets:
-                info.targets[library.name] = info.targets[nodelet]
-            else:
-                # This is a hack. What really needs to be done is to look through all
-                # the source files in info.targets to find which info.target defines the
-                # class in library.name or library.type, then add that target keyed by
-                # the type as well. This is needed because nodelets can be loaded into
-                # managers by their class name.
-                # TODO: Fix post paper
-                potential_matches = [key for key in info.targets if key in library.path or key in library.name]
-                if potential_matches:
-                    info.targets[library.name.split("/")[-1]] = info.targets[potential_matches[0].split("/")[-1]]
-
-        for nodelet, library in nodelet_libraries.items():
-            if nodelet not in info.targets:
-                logger.warning(f"info.targets={info.targets}")
-                logger.warning(f"Package {self.package.name}: '{nodelet}' "
-                               f"is referenced in nodelet_plugins.xml but not in "
-                               f"CMakeLists.txt.")
-            else:
-                target = info.targets[nodelet]
-                if isinstance(target, IncompleteCMakeLibraryTarget):
-                    info.targets[nodelet] = target.complete(entrypoint=library.entrypoint)
-                else:
-                    logger.warning(f"'{nodelet} target '{target.name}' "
-                                   f"trying to set entrypoint on {type(target)}'")
-        return info
+        return self._process_cmake_contents(contents, env)
 
     def _cmake_argparse(self, args, opts):   # noqa: ANN202, ANN001
         return cmake_argparse(args, opts)

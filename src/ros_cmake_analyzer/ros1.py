@@ -132,6 +132,7 @@ class ROS1CMakeExtractor(CMakeExtractor):
                     self.executables[name] = CMakeTarget(name,
                                                          SourceLanguage.PYTHON,
                                                          sources,
+                                                         [],
                                                          set(),
                                                          cmakelists_file=cmake_env["cmakelists"],
                                                          cmakelists_line=cmake_env["cmakelists_line"],

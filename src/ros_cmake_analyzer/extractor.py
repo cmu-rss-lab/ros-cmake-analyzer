@@ -310,8 +310,9 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             if opts["AFTER"] or opts["BEFORE"] or opts["SYSTEM"]:
                 logger.warning("include_directors AFTER, BEFORE, SYSTEM not supported")
             if "INCLUDE_DIRECTORIES" not in cmake_env:
-                cmake_env["INCLUDE_DIRECTORIES"] = " ".join(
-                    cmake_env["INCLUDE_DIRECTORIES"].split(" ") + paths_to_include)
+                cmake_env["INCLUDE_DIRECTORIES"] = ""
+            cmake_env["INCLUDE_DIRECTORIES"] = " ".join(
+                cmake_env["INCLUDE_DIRECTORIES"].split(" ") + paths_to_include)
 
     @cmake_command(["add_library", "cuda_add_library"])  # type: ignore
     def add_library(

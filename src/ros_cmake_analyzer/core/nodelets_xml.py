@@ -40,14 +40,14 @@ class NodeletsInfo:
             logger.warning("Expected there to be <library/> elements in nodelet_plugins.xml, but there are none.")
             logger.debug(contents)
         for library_dom in libraries_dom:
-            path = library_dom.getAttribute("path")
+            path = library_dom.attrib.get("path")
             class_doms = get_xml_nodes_by_name(
                 "class",
                 library_dom,
             )
             for class_dom in class_doms:
-                name = class_dom.getAttribute("name")
-                type_ = class_dom.getAttribute("type")
+                name = class_dom.attrib.get("name")
+                type_ = class_dom.attrib.get("type")
                 libraries.append(NodeletLibrary(path=path,
                                                 name=name,
                                                 type_=type_,
@@ -56,5 +56,4 @@ class NodeletsInfo:
 
 
 def get_xml_nodes_by_name(tag_name: str, tree: ET) -> list[ET]:
-    return [n for n in tree.childNodes
-            if n.nodeType == n.ELEMENT_NODE and n.tagName == tag_name]
+    return list(tree.iter(tag_name))

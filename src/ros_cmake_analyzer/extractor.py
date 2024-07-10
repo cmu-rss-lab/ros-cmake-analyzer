@@ -287,10 +287,31 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             name=name,
             language=SourceLanguage.CXX,
             sources=sources,
+            includes=cmake_env["INCLUDE_DIRECTORIES"].split(" ") if "INCLUDE_DIRECTORIES" in cmake_env else [],
             restrict_to_paths=self.package_paths(),
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=cmake_env["cmakelists_line"],
         )
+
+    @cmake_command
+    def include_directories(
+            self,
+            cmake_env: dict[str, t.Any],
+            raw_args: list[str],
+    ) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"AFTER": "-",
+             "BEFORE": "-",
+             "SYSTEM": "-"},
+        )
+        paths_to_include = [dir_ for dir_ in args if not Path(dir_).is_absolute()]
+        if len(paths_to_include) > 0:
+            if opts["AFTER"] or opts["BEFORE"] or opts["SYSTEM"]:
+                logger.warning("include_directors AFTER, BEFORE, SYSTEM not supported")
+            if "INCLUDE_DIRECTORIES" not in cmake_env:
+                cmake_env["INCLUDE_DIRECTORIES"] = " ".join(
+                    cmake_env["INCLUDE_DIRECTORIES"].split(" ") + paths_to_include)
 
     @cmake_command(["add_library", "cuda_add_library"])  # type: ignore
     def add_library(
@@ -319,6 +340,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             name,
             SourceLanguage.CXX,
             sources,
+            cmake_env["INCLUDE_DIRECTORIES"].split(" ") if "INCLUDE_DIRECTORIES" in cmake_env else [],
             self.package_paths(),
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=cmake_env["cmakelists_line"],

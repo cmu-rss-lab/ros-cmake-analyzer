@@ -20,6 +20,7 @@ class CMakeTarget:
     name: str
     language: SourceLanguage
     sources: set[Path]
+    includes: list[Path]
     restrict_to_paths: set[Path]
     cmakelists_file: str
     cmakelists_line: int
@@ -29,6 +30,7 @@ class CMakeTarget:
             "name": self.name,
             "language": self.language.value,
             "sources": list(self.sources),
+            "includes": self.includes,
             "path_restrictions": list(self.restrict_to_paths),
             "cmakelists_file": self.cmakelists_file,
             "cmakelists_line": self.cmakelists_line,
@@ -40,6 +42,7 @@ class CMakeTarget:
             info["name"],
             SourceLanguage(info["language"]),
             set(info["sources"]),
+            list(info["includes"]),
             set(info["path_restrictions"]),
             info["cmakelists_file"],
             info["cmakelists_line"],
@@ -67,6 +70,7 @@ class CMakeBinaryTarget(CMakeTarget):
         return CMakeBinaryTarget(info["name"],
                                  SourceLanguage(info["language"]),
                                  set(info["sources"]),
+                                 list(info["includes"]),
                                  set(info["path_restrictions"]),
                                  info["cmakelists_file"],
                                  info["cmakelists_line"],
@@ -123,6 +127,7 @@ class IncompleteCMakeLibraryTarget(CMakeTarget):
         return CMakeLibraryTarget(name=self.name,
                                   language=self.language,
                                   sources=self.sources,
+                                  includes=self.includes,
                                   restrict_to_paths=self.restrict_to_paths,
                                   cmakelists_file=self.cmakelists_file,
                                   cmakelists_line=self.cmakelists_line,

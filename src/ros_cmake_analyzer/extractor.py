@@ -238,7 +238,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         logger.debug(f"Set {args[0]} to {cmake_env[args[0]]}")
 
     @cmake_command
-    def __process_add_subdirectory(
+    def process_add_subdirectory(
             self,
             cmake_env: dict[str, str],
             raw_args: list[str],

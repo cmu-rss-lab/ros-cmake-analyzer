@@ -238,7 +238,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         logger.debug(f"Set {args[0]} to {cmake_env[args[0]]}")
 
     @cmake_command
-    def process_add_subdirectory(
+    def add_subdirectory(
             self,
             cmake_env: dict[str, str],
             raw_args: list[str],
@@ -258,7 +258,8 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         logger.info(f"Processing {cmakelists_path!s}")
         with cmakelists_path.open() as f:
             contents = f.read()
-        included_pacakge_instances = self._process_cmake_contents(contents, new_env)
+        sub_cmake = self.__class__(self.package.path)
+        included_pacakge_instances = sub_cmake._process_cmake_contents(contents, new_env)
         self.executables.update(
             **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets})
 
@@ -277,11 +278,14 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         name = args[0]
         sources: set[Path] = set()
         for source in args[1:]:
-            real_src = self._resolve_to_real_file(source, self.package.path, cmake_env)
-            if real_src:
-                sources.add(real_src)
+            if source in self.executables:
+                sources.update(self.executables[source].sources)
             else:
-                logger.warning(f"'{source} did not resolve to a real file.")
+                real_src = self._resolve_to_real_file(source, self.package.path, cmake_env)
+                if real_src:
+                    sources.add(real_src)
+                else:
+                    logger.warning(f"'{source} did not resolve to a real file.")
         logger.debug(f"Adding C++ sources for {name}")
         self.executables[name] = CMakeBinaryTarget(
             name=name,
@@ -333,9 +337,14 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         name = args[0]
         sources: set[Path] = set()
         for source in args[1:]:
-            real_src = self._resolve_to_real_file(source, self.package.path, cmake_env)
-            if real_src:
-                sources.add(real_src)
+            if source in self.executables:
+                sources.update(self.executables[source].sources)
+            else:
+                real_src = self._resolve_to_real_file(source, self.package.path, cmake_env)
+                if real_src:
+                    sources.add(real_src)
+                else:
+                    logger.warning(f"'{source} did not resolve to a real file.")
         logger.debug(f"Adding C++ library {name}")
         self.executables[name] = IncompleteCMakeLibraryTarget(
             name,

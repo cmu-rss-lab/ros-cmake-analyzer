@@ -233,7 +233,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         if opts["RELATIVE"]:
             # convert path to be relative
             relative = self.package.path / opts["RELATIVE"]
-            matches.extend([str((path / m).relative_to(relative)) for m in matches])
+            matches = [str(Path(m).relative_to(relative)) for m in matches]
         cmake_env[args[0]] = ";".join(matches)
         logger.debug(f"Set {args[0]} to {cmake_env[args[0]]}")
 
@@ -404,7 +404,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             parent = real_filename.parent
             try:
                 all_files = (package / parent).glob("*")
-                matching_files = [f for f in all_files if str(f).startswith(str(real_filename))]
+                matching_files = [f for f in all_files if str(f).startswith(str(real_filename.name))]
                 if len(matching_files) != 1:
                     raise ValueError(f"Only one file should match '{real_filename!s}'. "  # noqa: TRY301
                                      f"Currently {len(matching_files)} files do: {matching_files}")

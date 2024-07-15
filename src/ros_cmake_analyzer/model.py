@@ -118,7 +118,7 @@ class CMakeInfo:
     cmake_file: Path
     targets: dict[str, CMakeTarget]
     generated_sources: t.Collection[str]
-    unresolved_files: set[FileInformation]
+    unresolved_files: list[FileInformation]
     unprocessed_commands: list[CommandInformation]
 
 

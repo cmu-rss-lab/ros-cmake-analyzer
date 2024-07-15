@@ -22,7 +22,7 @@ __all__ = ("CMakeExtractor",)
 class CMakeExtractor(metaclass=CommandHandlerType):
 
     _files_generated_by_cmake: t.ClassVar[set[str]] = set()
-    _files_not_resolved: t.ClassVar[set[FileInformation]] = set()
+    _files_not_resolved: t.ClassVar[list[FileInformation]] = []
     _commands_not_process: t.ClassVar[list[CommandInformation]] = []
 
     def __init__(self, package_dir: str | Path) -> None:
@@ -122,7 +122,8 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             Information about the targets in CMakeLists.txt
 
         """
-        context = ParserContext().parse(file_contents, skip_callable=False, var=cmake_env)
+        pc = ParserContext()
+        context = pc.parse(file_contents, skip_callable=False, var=cmake_env)
         self.executables = {}
         for cmd, raw_args, _arg_tokens, (_fname, line, _column) in context:
             cmake_env["cmakelists_line"] = line
@@ -234,6 +235,8 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         matches = []
         for arg in args[1:]:
             finds = [self._trim_and_unquote(str(f)) for f in path.rglob(arg)]
+            if len(finds) == 0:
+                finds = [self._trim_and_unquote(str(f)) for f in self.package.path.rglob(arg)]
             logger.debug(f"Found the following matches to {arg} in {path}: {finds}")
             matches.extend(finds)
         if opts["RELATIVE"]:
@@ -415,8 +418,8 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                 if len(matching_files) != 1:
                     logger.error(f"Only one file should match '{real_filename!s}'. "
                                  f"Currently {len(matching_files)} files do: {matching_files}")
-                    self._files_not_resolved.add(FileInformation(filename, self.file,
-                                                                 int(cmake_env["cmakelists_line"])))
+                    self._files_not_resolved.append(FileInformation(filename, self.file,
+                                                                    int(cmake_env["cmakelists_line"])))
                     return None
                 real_filename = parent / matching_files[0]
             except Exception:

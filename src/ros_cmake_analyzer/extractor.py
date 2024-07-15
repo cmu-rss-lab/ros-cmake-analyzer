@@ -7,13 +7,20 @@ from pathlib import Path
 
 from loguru import logger
 
-from .cmake_parser.parser import argparse as cmake_argparse, ParserContext
+from .cmake_parser.parser import ParserContext
+from .cmake_parser.parser import argparse as cmake_argparse
 from .core.nodelets_xml import NodeletsInfo
 from .core.package import Package
-from .decorator import cmake_command, CMakeFunctionT, CommandHandlerType
-from .model import CMakeBinaryTarget, CMakeInfo, CommandInformation, FileInformation, IncompleteCMakeLibraryTarget, \
-    NodeletLibrary, \
-    SourceLanguage
+from .decorator import CMakeFunctionT, CommandHandlerType, cmake_command
+from .model import (
+    CMakeBinaryTarget,
+    CMakeInfo,
+    CommandInformation,
+    FileInformation,
+    IncompleteCMakeLibraryTarget,
+    NodeletLibrary,
+    SourceLanguage,
+)
 from .utils import key_val_list_to_dict
 
 __all__ = ("CMakeExtractor",)

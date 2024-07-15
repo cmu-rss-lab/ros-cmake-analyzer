@@ -39,7 +39,9 @@ class CMakeSyntaxError(RuntimeError):
 
 
 def _escape(s):
-    return re.sub(r'([\\$"])', r"\\\1", s)
+    if isinstance(s, str):
+        return re.sub(r'([\\$"])', r"\\\1", s)
+    return ";".join(_escape(string) for string in s)
 
 
 _special_escapes = {"\\n": "\n", "\\t": "\t", "\\r": "\r"}

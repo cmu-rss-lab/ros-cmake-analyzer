@@ -11,7 +11,9 @@ from .cmake_parser.parser import argparse as cmake_argparse, ParserContext
 from .core.nodelets_xml import NodeletsInfo
 from .core.package import Package
 from .decorator import cmake_command, CMakeFunctionT, CommandHandlerType
-from .model import CMakeBinaryTarget, CMakeInfo, IncompleteCMakeLibraryTarget, NodeletLibrary, SourceLanguage
+from .model import CMakeBinaryTarget, CMakeInfo, CommandInformation, FileInformation, IncompleteCMakeLibraryTarget, \
+    NodeletLibrary, \
+    SourceLanguage
 from .utils import key_val_list_to_dict
 
 __all__ = ("CMakeExtractor",)
@@ -20,6 +22,8 @@ __all__ = ("CMakeExtractor",)
 class CMakeExtractor(metaclass=CommandHandlerType):
 
     _files_generated_by_cmake: t.ClassVar[set[str]] = set()
+    _files_not_resolved: t.ClassVar[set[FileInformation]] = set()
+    _commands_not_process: t.ClassVar[list[CommandInformation]] = []
 
     def __init__(self, package_dir: str | Path) -> None:
         package_path = Path(package_dir) if isinstance(package_dir, str) else package_dir
@@ -84,7 +88,8 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         return {}
 
     def _info_from_cmakelists(self) -> CMakeInfo:
-        with (self.package.path / "CMakelists.txt").open() as f:
+        self.file = self.package.path / "CMakelists.txt"
+        with self.file.open() as f:
             contents = "".join(f.readlines())
         env: dict[str, str] = {"cmakelists": "CMakeLists.txt"}
         return self._process_cmake_contents(contents, env)
@@ -126,11 +131,15 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                 command = self.command_for(cmd)
                 if command:
                     command(self, cmake_env, raw_args)
+                else:
+                    self._commands_not_process.append(CommandInformation([cmd, raw_args], self.file, line))
             except Exception:
                 logger.error(f"Error processing {cmd}({raw_args}) in "
                              f"{cmake_env['cmakelists'] if 'cmakelists' in cmake_env else 'unknown'}")
                 raise
-        return CMakeInfo(self.executables, self._files_generated_by_cmake)
+        return CMakeInfo(self.file, self.executables, self._files_generated_by_cmake,
+                         unprocessed_commands=self._commands_not_process,
+                         unresolved_files=self._files_not_resolved)
 
     @cmake_command
     def project(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
@@ -193,10 +202,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         if not opts["APPEND"]:
             logger.warning(f"Cannot process list({args[0]} ...)")
             return
-        append_to = cmake_env[args[0]]
-        if not append_to:
-            cmake_env[args[0]] = []
-            append_to = cmake_env[args[0]]
+        append_to = cmake_env.setdefault(args[0], [])
         if isinstance(append_to, str):
             if append_to:
                 append_to += f";{args[1]}"
@@ -259,6 +265,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         with cmakelists_path.open() as f:
             contents = f.read()
         sub_cmake = self.__class__(self.package.path)
+        sub_cmake.file = cmakelists_path
         included_pacakge_instances = sub_cmake._process_cmake_contents(contents, new_env)
         self.executables.update(
             **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets})
@@ -406,11 +413,12 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                 all_files = (package / parent).glob("*")
                 matching_files = [f for f in all_files if str(f).startswith(str(real_filename.name))]
                 if len(matching_files) != 1:
-                    raise ValueError(f"Only one file should match '{real_filename!s}'. "  # noqa: TRY301
-                                     f"Currently {len(matching_files)} files do: {matching_files}")
+                    logger.error(f"Only one file should match '{real_filename!s}'. "
+                                 f"Currently {len(matching_files)} files do: {matching_files}")
+                    self._files_not_resolved.add(FileInformation(filename, self.file,
+                                                                 int(cmake_env["cmakelists_line"])))
+                    return None
                 real_filename = parent / matching_files[0]
-            except ValueError:
-                raise
             except Exception:
                 logger.error(
                     f"Error finding real file matching {real_filename} "

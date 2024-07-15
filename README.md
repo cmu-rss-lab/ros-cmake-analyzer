@@ -96,7 +96,9 @@ info = cmake.get_cmake_info()
 ```
 
 The `info` object is an instance of `ros_cmake_extractor.CMakeInfo`, which contains
-a dictionary of targets, keyed by name, and a list of sources that will be generated.
+a dictionary of targets, keyed by name, a list of sources that will be generated,
+a set of referenced files that could not be resolved (along with where they appeared),
+and a list of commands not processed (along with where they appeared).
 
 Note that when the analyzer is used on projects that are not built, the generated sources
 will not exist.

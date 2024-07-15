@@ -15,14 +15,14 @@ class SourceLanguage(enum.Enum):
     PYTHON = "python"
 
 
-@dataclass
+@dataclass(frozen=True)
 class FileInformation:
-    path: str
+    filename: str
     cmake_file: Path
     cmake_line_no: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class CommandInformation:
     command: list[str]
     cmake_file: Path

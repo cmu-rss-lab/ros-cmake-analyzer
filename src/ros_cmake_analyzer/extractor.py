@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+from charset_normalizer import from_path
 import re
 import typing as t
 from pathlib import Path
@@ -11,7 +12,7 @@ from .cmake_parser.parser import ParserContext
 from .cmake_parser.parser import argparse as cmake_argparse
 from .core.nodelets_xml import NodeletsInfo
 from .core.package import Package
-from .decorator import CMakeFunctionT, CommandHandlerType, cmake_command
+from .decorator import aliased_cmake_command, TCMakeFunction, CommandHandlerType, cmake_command
 from .model import (
     CMakeBinaryTarget,
     CMakeInfo,
@@ -36,7 +37,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         package_path = Path(package_dir) if isinstance(package_dir, str) else package_dir
         self.package = Package.from_dir(package_path)
 
-    def command_for(self, command: str) -> CMakeFunctionT | None:
+    def command_for(self, command: str) -> TCMakeFunction | None:
         for h in type(self).__mro__:
             if hasattr(h, "_handlers") and command in h._handlers:
                 return h._handlers[command]
@@ -95,9 +96,10 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         return {}
 
     def _info_from_cmakelists(self) -> CMakeInfo:
-        path = self.package.path / "CMakelists.txt"
-        with path.open() as f:
-            contents = "".join(f.readlines())
+        path = self.package.path / "CMakelists.txt"  # TODO: CMakeLists.txt
+        # with path.open(encoding="utf_8") as f:
+        #     contents = "".join(f.readlines())
+        contents = str(from_path(path).best())
         env: dict[str, str] = {"cmakelists": str(path)}
         return self._process_cmake_contents(contents, env)
 
@@ -143,10 +145,13 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                     self._commands_not_process.append(CommandInformation([cmd, raw_args],
                                                                          Path(cmake_env["cmakelists"]),
                                                                          line))
-            except Exception:
+            except BaseException:  # noqa:BLE001  Don't want to crash, just want to report
                 logger.error(f"Error processing {cmd}({raw_args}) in "
-                             f"{cmake_env['cmakelists'] if 'cmakelists' in cmake_env else 'unknown'}")
-                raise
+                             f"{cmake_env['cmakelists'] if 'cmakelists' in cmake_env else 'unknown'}:{line}")
+                self._commands_not_process.append(CommandInformation([cmd, raw_args],
+                                                                     Path(cmake_env["cmakelists"]),
+                                                                     line))
+                # raise
         return CMakeInfo(Path(cmake_env["cmakelists"]), self.executables, self._files_generated_by_cmake,
                          unprocessed_commands=self._commands_not_process,
                          unresolved_files=self._files_not_resolved)
@@ -201,7 +206,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         values = ";".join(str(dir_name / f) for f in path.glob("*"))
         cmake_env[var_name] = values
 
-    @cmake_command(["list"])
+    @aliased_cmake_command("list")
     def list_directive(
             self,
             cmake_env: dict[str, t.Any],
@@ -219,7 +224,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             else:
                 append_to = args[1]
             cmake_env[args[0]] = append_to
-        elif isinstance(append_to, list):
+        elif isinstance(append_to, list) and args.length > 1:
             append_to.append(args[1])
         else:
             logger.error(f"Don't know how to append_to append append_to type: {type(append_to)}")
@@ -281,7 +286,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         self.executables.update(
             **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets})
 
-    @cmake_command(["add_executable", "cuda_add_executable"])
+    @aliased_cmake_command("add_executable", "cuda_add_executable")
     def add_executable(
             self,
             cmake_env: dict[str, t.Any],
@@ -336,7 +341,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             cmake_env["INCLUDE_DIRECTORIES"] = " ".join(
                 cmake_env["INCLUDE_DIRECTORIES"].split(" ") + paths_to_include)
 
-    @cmake_command(["add_library", "cuda_add_library"])  # type: ignore
+    @aliased_cmake_command("add_library", "cuda_add_library")  # type: ignore
     def add_library(
             self,
             cmake_env: dict[str, t.Any],

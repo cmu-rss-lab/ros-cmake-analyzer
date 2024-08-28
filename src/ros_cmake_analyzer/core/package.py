@@ -25,7 +25,9 @@ class Package:
         """
         package_xml = path / "package.xml"
         if not package_xml.is_file():
-            raise ValueError(f"No package.xml for package {path!s}")
+            pacakge_xml = path / "manifest.xml"
+            if not pacakge_xml.is_file():
+                raise ValueError(f"No package.xml for package {path!s}")
 
         with package_xml.open() as f:
             contents = f.read()

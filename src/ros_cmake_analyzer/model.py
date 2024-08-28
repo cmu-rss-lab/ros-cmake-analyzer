@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 import typing as t
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 if t.TYPE_CHECKING:
     from pathlib import Path
@@ -38,6 +38,7 @@ class CMakeTarget:
     restrict_to_paths: set[Path]
     cmakelists_file: str
     cmakelists_line: int
+    libraries: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, t.Any]:
         return {

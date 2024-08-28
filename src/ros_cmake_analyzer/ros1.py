@@ -22,6 +22,7 @@ class ROS1CMakeExtractor(CMakeExtractor):
 
         info = self._info_from_cmakelists()
         self._add_nodelet_information(info)
+        self._hook_libraries_into_executables(info)
         return info
 
     def _add_nodelet_information(self, info: CMakeInfo) -> None:

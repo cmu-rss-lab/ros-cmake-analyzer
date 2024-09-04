@@ -28,7 +28,6 @@ __all__ = ("CMakeExtractor",)
 
 
 class CMakeExtractor(metaclass=CommandHandlerType):
-
     _files_generated_by_cmake: t.ClassVar[set[str]] = set()
     _files_not_resolved: t.ClassVar[list[FileInformation]] = []
     _commands_not_process: t.ClassVar[list[CommandInformation]] = []
@@ -79,7 +78,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             # Read from package
             defn = self.package.definition
             for export in defn.exports:
-                logger.debug("Looking for export in pacakge.xml")
+                logger.debug("Looking for export in package.xml")
                 if export.tagname == "nodelet" and "plugin" in export.attributes:
                     plugin = export.attributes["plugin"]
                     plugin = plugin.replace("${prefix}", "")
@@ -101,7 +100,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         return {}
 
     def _info_from_cmakelists(self) -> CMakeInfo:
-        path = self.package.path / "CMakelists.txt"  # TODO: CMakeLists.txt
+        path = self.package.path / "CMakeLists.txt"
         # with path.open(encoding="utf_8") as f:
         #     contents = "".join(f.readlines())
         contents = str(from_path(path).best())

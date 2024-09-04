@@ -2,8 +2,14 @@ import typing as t
 from pathlib import Path
 
 from ros_cmake_analyzer import CMakeExtractor
-from ros_cmake_analyzer.decorator import cmake_command
-from ros_cmake_analyzer.model import DUMMY_VALUE, CMakeInfo
+from ros_cmake_analyzer.decorator import (
+    aliased_cmake_command,
+    cmake_command,
+)
+from ros_cmake_analyzer.model import (
+    CMakeInfo,
+    DUMMY_VALUE,
+)
 
 
 class ROS2CMakeExtractor(CMakeExtractor):
@@ -31,7 +37,7 @@ class ROS2CMakeExtractor(CMakeExtractor):
         }
         return dict_
 
-    @cmake_command(["ament_python_install_package"])
+    @aliased_cmake_command("ament_python_install_package")
     def python_install_package(self, raw_args: list[str], cmake_env: dict[str, t.Any]) -> None:
         pass
 

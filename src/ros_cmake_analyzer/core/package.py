@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+__all__ = ("Package",)
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,7 +12,6 @@ from .package_xml.package import PackageDefinition, parse_package_string
 class Package:
     name: str
     path: Path
-
     definition: PackageDefinition | None
 
     @classmethod
@@ -25,15 +28,15 @@ class Package:
         """
         package_xml = path / "package.xml"
         if not package_xml.is_file():
-            pacakge_xml = path / "manifest.xml"
-            if not pacakge_xml.is_file():
-                raise ValueError(f"No package.xml for package {path!s}")
+            package_xml = path / "manifest.xml"
+            if not package_xml.is_file():
+                raise ValueError(f"No package.xml for package: {path!s}")
 
         with package_xml.open() as f:
             contents = f.read()
         return parse_package_string(contents, filename=package_xml)  # type: ignore
 
     @classmethod
-    def from_dir(cls, directory: Path) -> "Package":
+    def from_dir(cls, directory: Path) -> Package:
         defn = cls.get_package_definition(directory)
         return cls(defn.name, directory, defn)

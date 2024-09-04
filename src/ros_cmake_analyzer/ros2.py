@@ -8,7 +8,7 @@ from ros_cmake_analyzer.model import DUMMY_VALUE, CMakeInfo
 
 class ROS2CMakeExtractor(CMakeExtractor):
 
-    def __init(self, package_dir: str | Path) -> None:
+    def __init__(self, package_dir: str | Path) -> None:
         super().__init__(package_dir)
 
     def package_paths(self) -> set[Path]:

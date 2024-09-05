@@ -327,7 +327,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         )
 
     @cmake_command
-    def target_link_libraries(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+    def add_library(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
         opts, args = self._cmake_argparse(raw_args, {})
         executable = args[0]
         libraries = args[1:]

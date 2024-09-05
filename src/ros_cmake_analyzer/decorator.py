@@ -35,7 +35,7 @@ def aliased_cmake_command(*commands: str) -> t.Callable[[TCMakeFunction], TCMake
     """
 
     def wrapper(fn: TCMakeFunction) -> TCMakeFunction:
-        fn.command = commands
+        fn.commands = commands
         return fn
 
     return wrapper

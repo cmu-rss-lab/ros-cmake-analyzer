@@ -16,7 +16,7 @@ from .decorator import aliased_cmake_command, TCMakeFunction, CommandHandlerType
 from .model import (
     CMakeBinaryTarget,
     CMakeInfo,
-    CMakeTarget, CommandInformation,
+    CMakeLibraryTarget, CMakeTarget, CommandInformation,
     FileInformation,
     IncompleteCMakeLibraryTarget,
     NodeletLibrary,
@@ -57,7 +57,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
     def _hook_libraries_into_executables(self, info: CMakeInfo) -> None:
         for name, target in info.targets.items():
             if name in self.libraries:
-                target.libraries.extend(self.libraries[name] if self.libraries[name] is not None else [])
+                target.libraries.extend(self.libraries_for[name] if self.libraries_for[name] is not None else [])
 
     def get_nodelet_entrypoints(self) -> t.Mapping[str, NodeletLibrary]:
         """Returns the potential nodelet entrypoints and classname for the package.
@@ -138,7 +138,8 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         pc = ParserContext()
         context = pc.parse(file_contents, skip_callable=False, var=cmake_env)
         self.executables: dict[str, CMakeTarget] = {}
-        self.libraries: dict[str, list[str]] = {}
+        self.libraries: dict[str, CMakeTarget] = {}
+        self.libraries_for: dict[str, list[str]] = {}
         for cmd, raw_args, _arg_tokens, (_fname, line, _column) in context:
             cmake_env["cmakelists_line"] = line
             try:
@@ -330,8 +331,25 @@ class CMakeExtractor(metaclass=CommandHandlerType):
     def add_library(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
         opts, args = self._cmake_argparse(raw_args, {})
         executable = args[0]
+        sources = args[1:]
+        self.libraries[executable] = CMakeLibraryTarget(
+            name=executable,
+            language=SourceLanguage.CXX,
+            sources=sources,
+            includes=cmake_env["INCLUDE_DIRECTORIES"].split(" ") if "INCLUDE_DIRECTORIES" in cmake_env else [],
+            libraries=[],
+            restrict_to_paths=self.package_paths(),
+            cmakelists_file=cmake_env["cmakelists"],
+            cmakelists_line=cmake_env["cmakelists_line"],
+            _entrypoint=""
+        )
+
+    @cmake_command
+    def target_link_libraries(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(raw_args, {})
+        executable = args[0]
         libraries = args[1:]
-        self.libraries[executable] = self.libraries.get(executable, []).extend(libraries)
+        self.libraries_for[executable] = self.libraries_for.get(executable, []).extend(libraries)
 
     @cmake_command
     def include_directories(

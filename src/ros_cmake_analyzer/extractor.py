@@ -57,7 +57,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
     def _hook_libraries_into_executables(self, info: CMakeInfo) -> None:
         for name, target in info.targets.items():
             if name in self.libraries:
-                target.libraries.extend(self.libraries[name])
+                target.libraries.extend(self.libraries[name] if self.libraries[name] is not None else [])
 
     def get_nodelet_entrypoints(self) -> t.Mapping[str, NodeletLibrary]:
         """Returns the potential nodelet entrypoints and classname for the package.

@@ -328,23 +328,6 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         )
 
     @cmake_command
-    def add_library(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
-        opts, args = self._cmake_argparse(raw_args, {})
-        executable = args[0]
-        sources = args[1:]
-        self.libraries[executable] = CMakeLibraryTarget(
-            name=executable,
-            language=SourceLanguage.CXX,
-            sources=sources,
-            includes=cmake_env["INCLUDE_DIRECTORIES"].split(" ") if "INCLUDE_DIRECTORIES" in cmake_env else [],
-            libraries=[],
-            restrict_to_paths=self.package_paths(),
-            cmakelists_file=cmake_env["cmakelists"],
-            cmakelists_line=cmake_env["cmakelists_line"],
-            _entrypoint=""
-        )
-
-    @cmake_command
     def target_link_libraries(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
         opts, args = self._cmake_argparse(raw_args, {})
         executable = args[0]

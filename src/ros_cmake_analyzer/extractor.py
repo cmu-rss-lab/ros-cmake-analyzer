@@ -159,7 +159,9 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                                                                      Path(cmake_env["cmakelists"]),
                                                                      line))
                 # raise
-        return CMakeInfo(Path(cmake_env["cmakelists"]), self.executables, self._files_generated_by_cmake,
+        return CMakeInfo(Path(cmake_env["cmakelists"]), self.executables,
+                         plugin_references=self.plugin_references,
+                         generated_sources=self._files_generated_by_cmake,
                          unprocessed_commands=self._commands_not_process,
                          unresolved_files=self._files_not_resolved)
 
@@ -460,7 +462,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         return real_filename
 
     @cmake_command
-    def pluginlib_export_plugin_description_file(self, raw_args: list[str], cmake_env: dict[str, t.Any]) -> None:
+    def pluginlib_export_plugin_description_file(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
         # https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Pluginlib.html
         _opts, args = self._cmake_argparse(raw_args, {})
         self.plugin_references.append(CMakePluginReference(
@@ -469,4 +471,3 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=int(cmake_env["cmakelists_line"])
         ))
-

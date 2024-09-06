@@ -38,7 +38,7 @@ class ROS2CMakeExtractor(CMakeExtractor):
         return dict_
 
     @aliased_cmake_command("ament_python_install_package")
-    def python_install_package(self, raw_args: list[str], cmake_env: dict[str, t.Any]) -> None:
+    def python_install_package(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
         # https://docs.ros.org/en/foxy/How-To-Guides/Ament-CMake-Python-Documentation.html
         # This installs a directory as a module that can be used in python as a library
         opts, args = self._cmake_argparse(raw_args, {})

@@ -8,7 +8,7 @@ from ros_cmake_analyzer.decorator import (
 )
 from ros_cmake_analyzer.model import (
     CMakeInfo,
-    DUMMY_VALUE,
+    DUMMY_VALUE, IncompleteCMakeLibraryTarget, SourceLanguage,
 )
 
 
@@ -39,9 +39,34 @@ class ROS2CMakeExtractor(CMakeExtractor):
 
     @aliased_cmake_command("ament_python_install_package")
     def python_install_package(self, raw_args: list[str], cmake_env: dict[str, t.Any]) -> None:
-        pass
+        # https://docs.ros.org/en/foxy/How-To-Guides/Ament-CMake-Python-Documentation.html
+        # This installs a directory as a module that can be used in python as a library
+        opts, args = self._cmake_argparse(raw_args, {})
+        name = args[0]
+        # Check that directory has __init__.py, otherwise it isn't valid
+        # sources should be all python files in the module?
+        directory = Path(name)
+        if "cwd" in cmake_env:
+            directory = Path(cmake_env["cwd"]) / directory
+        directory = self.package.path / directory
+        if not directory.is_dir():
+            raise FileNotFoundError(f"Directory {directory!s} does not exist")
+        if not (directory / "__init__.py").is_file():
+            raise FileNotFoundError(f"Directory {directory!s} does not contain __init__.py")
+        sources = [file for file in directory.glob("*.py") if file.name != "__init__.py"]
+        self.executables[name] = IncompleteCMakeLibraryTarget(
+            name,
+            SourceLanguage.PYTHON,
+            set(sources),
+            [],
+            self.package_paths(),
+            cmakelists_file=cmake_env["cmakelists"],
+            cmakelists_line=cmake_env["cmakelists_line"],
+        )
+
 
     @cmake_command
     def pluginlib_export_plugin_description_file(self, raw_args: list[str], cmake_env: dict[str, t.Any]) -> None:
         # https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Pluginlib.html
+        # TODO
         pass

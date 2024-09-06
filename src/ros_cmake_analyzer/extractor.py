@@ -56,7 +56,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
 
     def _hook_libraries_into_executables(self, info: CMakeInfo) -> None:
         for name, target in info.targets.items():
-            if name in self.libraries:
+            if name in self.libraries_for:
                 target.libraries.extend(self.libraries_for[name] if self.libraries_for[name] is not None else [])
 
     def get_nodelet_entrypoints(self) -> t.Mapping[str, NodeletLibrary]:
@@ -332,7 +332,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         opts, args = self._cmake_argparse(raw_args, {})
         executable = args[0]
         libraries = args[1:]
-        self.libraries_for[executable] = self.libraries_for.get(executable, []).extend(libraries)
+        self.libraries_for[executable] = self.libraries_for.get(executable, []) + libraries
 
     @cmake_command
     def include_directories(

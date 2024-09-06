@@ -63,10 +63,3 @@ class ROS2CMakeExtractor(CMakeExtractor):
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=cmake_env["cmakelists_line"],
         )
-
-
-    @cmake_command
-    def pluginlib_export_plugin_description_file(self, raw_args: list[str], cmake_env: dict[str, t.Any]) -> None:
-        # https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Pluginlib.html
-        # TODO
-        pass

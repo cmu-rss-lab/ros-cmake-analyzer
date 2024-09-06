@@ -118,6 +118,7 @@ class CMakeInfo:
 
     cmake_file: Path
     targets: dict[str, CMakeTarget]
+    plugin_references: tuple(CMakePluginReference, ...)
     generated_sources: t.Collection[str]
     unresolved_files: list[FileInformation]
     unprocessed_commands: list[CommandInformation]
@@ -156,3 +157,11 @@ class IncompleteCMakeLibraryTarget(CMakeTarget):
                                   cmakelists_file=self.cmakelists_file,
                                   cmakelists_line=self.cmakelists_line,
                                   _entrypoint=entrypoint)
+
+
+@dataclass(frozen=True)
+class CMakePluginReference:
+    plugin_xml: Path
+    base_class_package: str
+    cmakelists_file: str
+    cmakelists_line: int

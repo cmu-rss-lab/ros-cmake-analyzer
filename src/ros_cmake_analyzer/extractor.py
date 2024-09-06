@@ -16,7 +16,7 @@ from .decorator import aliased_cmake_command, TCMakeFunction, CommandHandlerType
 from .model import (
     CMakeBinaryTarget,
     CMakeInfo,
-    CMakeLibraryTarget, CMakeTarget, CommandInformation,
+    CMakeLibraryTarget, CMakePluginReference, CMakeTarget, CommandInformation,
     FileInformation,
     IncompleteCMakeLibraryTarget,
     NodeletLibrary,
@@ -140,6 +140,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         self.executables: dict[str, CMakeTarget] = {}
         self.libraries: dict[str, CMakeTarget] = {}
         self.libraries_for: dict[str, list[str]] = {}
+        self.plugin_references: list[CMakePluginReference] = []
         for cmd, raw_args, _arg_tokens, (_fname, line, _column) in context:
             cmake_env["cmakelists_line"] = line
             try:
@@ -457,3 +458,15 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                 logger.error(cmake_env)
                 raise
         return real_filename
+
+    @cmake_command
+    def pluginlib_export_plugin_description_file(self, raw_args: list[str], cmake_env: dict[str, t.Any]) -> None:
+        # https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Pluginlib.html
+        _opts, args = self._cmake_argparse(raw_args, {})
+        self.plugin_references.append(CMakePluginReference(
+            base_class_package=args[0],
+            plugin_xml=args[1],
+            cmakelists_file=cmake_env["cmakelists"],
+            cmakelists_line=int(cmake_env["cmakelists_line"])
+        ))
+

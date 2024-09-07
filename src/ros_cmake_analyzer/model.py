@@ -118,7 +118,7 @@ class CMakeInfo:
 
     cmake_file: Path
     targets: dict[str, CMakeTarget]
-    plugin_references: tuple(CMakePluginReference, ...)
+    plugin_references: tuple[CMakePluginReference, ...]
     generated_sources: t.Collection[str]
     unresolved_files: list[FileInformation]
     unprocessed_commands: list[CommandInformation]

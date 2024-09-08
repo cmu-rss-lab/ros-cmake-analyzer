@@ -16,7 +16,7 @@ from .decorator import aliased_cmake_command, TCMakeFunction, CommandHandlerType
 from .model import (
     CMakeBinaryTarget,
     CMakeInfo,
-    CMakeLibraryTarget, CMakePluginReference, CMakeTarget, CommandInformation,
+    CMakePluginReference, CMakeTarget, CommandInformation,
     FileInformation,
     IncompleteCMakeLibraryTarget,
     NodeletLibrary,
@@ -160,7 +160,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                                                                      line))
                 # raise
         return CMakeInfo(Path(cmake_env["cmakelists"]), self.executables,
-                         plugin_references=self.plugin_references,
+                         plugin_references=tuple(self.plugin_references),
                          generated_sources=self._files_generated_by_cmake,
                          unprocessed_commands=self._commands_not_process,
                          unresolved_files=self._files_not_resolved)

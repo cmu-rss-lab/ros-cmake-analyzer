@@ -16,7 +16,7 @@ from .decorator import aliased_cmake_command, TCMakeFunction, CommandHandlerType
 from .model import (
     CMakeBinaryTarget,
     CMakeInfo,
-    CMakePluginReference, CMakeTarget, CommandInformation,
+    CMakeLibraryTarget, CMakePluginReference, CMakeTarget, CommandInformation,
     FileInformation,
     IncompleteCMakeLibraryTarget,
     NodeletLibrary,
@@ -76,8 +76,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         nodelets_xml_path = self.package.path / "nodelet_plugins.xml"
         if not nodelets_xml_path.exists():
             # Read from package
-            defn = self.package.definition
-            for export in defn.exports:
+            for export in self.package.exports:
                 logger.debug("Looking for export in package.xml")
                 if export.tagname == "nodelet" and "plugin" in export.attributes:
                     plugin = export.attributes["plugin"]
@@ -160,7 +159,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                                                                      line))
                 # raise
         return CMakeInfo(Path(cmake_env["cmakelists"]), self.executables,
-                         plugin_references=tuple(self.plugin_references),
+                         plugin_references=self.plugin_references,
                          generated_sources=self._files_generated_by_cmake,
                          unprocessed_commands=self._commands_not_process,
                          unresolved_files=self._files_not_resolved)

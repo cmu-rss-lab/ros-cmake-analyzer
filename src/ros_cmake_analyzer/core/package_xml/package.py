@@ -58,23 +58,23 @@ class PackageDefinition:
         "package_format",
         "name",
         "version",
-        "version_compatibility",
-        "description",
-        "maintainers",
-        "licenses",
-        "urls",
-        "authors",
-        "build_depends",
-        "buildtool_depends",
-        "build_export_depends",
-        "buildtool_export_depends",
-        "exec_depends",
-        "test_depends",
-        "doc_depends",
-        "conflicts",
-        "replaces",
-        "group_depends",
-        "member_of_groups",
+        # "version_compatibility",
+        # "description",
+        # "maintainers",
+        # "licenses",
+        # "urls",
+        # "authors",
+        # "build_depends",
+        # "buildtool_depends",
+        # "build_export_depends",
+        # "buildtool_export_depends",
+        # "exec_depends",
+        # "test_depends",
+        # "doc_depends",
+        # "conflicts",
+        # "replaces",
+        # "group_depends",
+        # "member_of_groups",
         "exports",
         "filename",
     ]
@@ -85,50 +85,50 @@ class PackageDefinition:
         :param filename: location of package.xml.  Necessary if
           converting ``${prefix}`` in ``<export>`` values, ``str``.
         """
-        # initialize all slots ending with "s" with lists, all other with plain values
-        for attr in self.__slots__:
-            if attr.endswith("s"):
-                value = list(kwargs[attr]) if attr in kwargs else []
-                setattr(self, attr, value)
-            else:
-                value = kwargs[attr] if attr in kwargs else None
-                setattr(self, attr, value)
-        if "depends" in kwargs:
-            for d in kwargs["depends"]:
-                for slot in [self.build_depends, self.build_export_depends, self.exec_depends]:
-                    if d not in slot:
-                        slot.append(deepcopy(d))
-            del kwargs["depends"]
-        if "run_depends" in kwargs:
-            for d in kwargs["run_depends"]:
-                for slot in [self.build_export_depends, self.exec_depends]:
-                    if d not in slot:
-                        slot.append(deepcopy(d))
-            del kwargs["run_depends"]
+        # # initialize all slots ending with "s" with lists, all other with plain values
+        # for attr in self.__slots__:
+        #     if attr.endswith("s"):
+        #         value = list(kwargs[attr]) if attr in kwargs else []
+        #         setattr(self, attr, value)
+        #     else:
+        #         value = kwargs[attr] if attr in kwargs else None
+        #         setattr(self, attr, value)
+        # if "depends" in kwargs:
+        #     for d in kwargs["depends"]:
+        #         for slot in [self.build_depends, self.build_export_depends, self.exec_depends]:
+        #             if d not in slot:
+        #                 slot.append(deepcopy(d))
+        #     del kwargs["depends"]
+        # if "run_depends" in kwargs:
+        #     for d in kwargs["run_depends"]:
+        #         for slot in [self.build_export_depends, self.exec_depends]:
+        #             if d not in slot:
+        #                 slot.append(deepcopy(d))
+        #     del kwargs["run_depends"]
         self.filename = filename
-        self.licenses = [license_ if isinstance(license_, License) else License(license_) for license_ in self.licenses]
-        # verify that no unknown keywords are passed
-        unknown = set(kwargs.keys()).difference(self.__slots__)
-        if unknown:
-            raise TypeError("Unknown properties: %s" % ", ".join(unknown))
+        # self.licenses = [license_ if isinstance(license_, License) else License(license_) for license_ in self.licenses]
+        # # verify that no unknown keywords are passed
+        # unknown = set(kwargs.keys()).difference(self.__slots__)
+        # if unknown:
+        #     raise TypeError("Unknown properties: %s" % ", ".join(unknown))
 
-    def __getattr__(self, name):
-        if name == "run_depends":
-            # merge different dependencies if they are not exactly equal
-            # potentially having the same dependency name multiple times with different attributes
-            run_depends = []
-            [run_depends.append(deepcopy(d)) for d in self.exec_depends + self.build_export_depends if d not in run_depends]
-            return run_depends
-        raise AttributeError(name)
-
-    def __getitem__(self, key):
-        if key in self.__slots__ + ["run_depends"]:
-            return getattr(self, key)
-        raise KeyError('Unknown key "%s"' % key)
-
-    def __iter__(self):
-        for slot in self.__slots__:
-            yield slot
+    # def __getattr__(self, name):
+    #     if name == "run_depends":
+    #         # merge different dependencies if they are not exactly equal
+    #         # potentially having the same dependency name multiple times with different attributes
+    #         run_depends = []
+    #         [run_depends.append(deepcopy(d)) for d in self.exec_depends + self.build_export_depends if d not in run_depends]
+    #         return run_depends
+    #     raise AttributeError(name)
+    #
+    # def __getitem__(self, key):
+    #     if key in self.__slots__ + ["run_depends"]:
+    #         return getattr(self, key)
+    #     raise KeyError('Unknown key "%s"' % key)
+    #
+    # def __iter__(self):
+    #     for slot in self.__slots__:
+    #         yield slot
 
     def __str__(self):
         data = {}
@@ -162,49 +162,49 @@ class PackageDefinition:
             return build_type_exports[0]
         raise InvalidPackage("Only one <build_type> element is permitted.", self.filename)
 
-    def has_invalid_metapackage_dependencies(self):
-        """Return True if this package has invalid dependencies for a metapackage.
+    # def has_invalid_metapackage_dependencies(self):
+    #     """Return True if this package has invalid dependencies for a metapackage.
+    #
+    #     This is defined by REP-0127 as any non-run_depends dependencies other then a buildtool_depend on catkin.
+    #
+    #     :returns: True if the given package has any invalid dependencies, otherwise False
+    #     :rtype: bool
+    #     """
+    #     buildtool_depends = [d.name for d in self.buildtool_depends if d.name != "catkin"]
+    #     return len(self.build_depends + buildtool_depends + self.test_depends) > 0
 
-        This is defined by REP-0127 as any non-run_depends dependencies other then a buildtool_depend on catkin.
-
-        :returns: True if the given package has any invalid dependencies, otherwise False
-        :rtype: bool
-        """
-        buildtool_depends = [d.name for d in self.buildtool_depends if d.name != "catkin"]
-        return len(self.build_depends + buildtool_depends + self.test_depends) > 0
-
-    def is_metapackage(self):
-        """Return True if this pacakge is a metapackage, otherwise False.
-
-        :returns: True if metapackage, else False
-        :rtype: bool
-        """
-        return "metapackage" in (e.tagname for e in self.exports)
-
-    def evaluate_conditions(self, context):
-        """Evaluate the conditions of all dependencies and memberships.
-
-        :param context: A dictionary with key value pairs to replace variables
-          starting with $ in the condition.
-        :raises: :exc:`ValueError` if any condition fails to parse
-        """
-        for attr in (
-            "build_depends",
-            "buildtool_depends",
-            "build_export_depends",
-            "buildtool_export_depends",
-            "exec_depends",
-            "test_depends",
-            "doc_depends",
-            "conflicts",
-            "replaces",
-            "group_depends",
-            "member_of_groups",
-            "exports",
-        ):
-            conditionals = getattr(self, attr)
-            for conditional in conditionals:
-                conditional.evaluate_condition(context)
+    # def is_metapackage(self):
+    #     """Return True if this pacakge is a metapackage, otherwise False.
+    #
+    #     :returns: True if metapackage, else False
+    #     :rtype: bool
+    #     """
+    #     return "metapackage" in (e.tagname for e in self.exports)
+    #
+    # def evaluate_conditions(self, context):
+    #     """Evaluate the conditions of all dependencies and memberships.
+    #
+    #     :param context: A dictionary with key value pairs to replace variables
+    #       starting with $ in the condition.
+    #     :raises: :exc:`ValueError` if any condition fails to parse
+    #     """
+    #     for attr in (
+    #         "build_depends",
+    #         "buildtool_depends",
+    #         "build_export_depends",
+    #         "buildtool_export_depends",
+    #         "exec_depends",
+    #         "test_depends",
+    #         "doc_depends",
+    #         "conflicts",
+    #         "replaces",
+    #         "group_depends",
+    #         "member_of_groups",
+    #         "exports",
+    #     ):
+    #         conditionals = getattr(self, attr)
+    #         for conditional in conditionals:
+    #             conditional.evaluate_condition(context)
 
     def validate(self, warnings=None):
         """Make sure all standards for packages are met.

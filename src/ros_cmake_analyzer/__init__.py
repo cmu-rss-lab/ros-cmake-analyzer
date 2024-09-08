@@ -1,1 +1,3 @@
-from .extractor import CMakeExtractor  # noqa: F401
+__all__ = ("CMakeExtractor",)
+
+from .extractor import CMakeExtractor

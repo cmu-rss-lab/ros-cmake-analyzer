@@ -6,7 +6,13 @@ from loguru import logger
 
 from .decorator import cmake_command
 from .extractor import CMakeExtractor
-from .model import DUMMY_VALUE, CMakeInfo, CMakeTarget, IncompleteCMakeLibraryTarget, SourceLanguage
+from .model import (
+    CMakeBinaryTarget,
+    CMakeInfo,
+    DUMMY_VALUE,
+    IncompleteCMakeLibraryTarget,
+    SourceLanguage,
+)
 
 
 class ROS1CMakeExtractor(CMakeExtractor):
@@ -111,30 +117,33 @@ class ROS1CMakeExtractor(CMakeExtractor):
 
     @cmake_command
     def catkin_install_python(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
-            opts, args = self._cmake_argparse(
-                raw_args,
-                {"PROGRAMS": "*", "DESTINATION": "*"},
-            )  # type: ignore
-            if "PROGRAMS" not in opts:
-                raise ValueError("PROGRAMS not specifie in catkin_install_python")
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"PROGRAMS": "*", "DESTINATION": "*"},
+        )  # type: ignore
+        if "PROGRAMS" not in opts:
+            raise ValueError("PROGRAMS not specifie in catkin_install_python")
 
-            for program in opts["PROGRAMS"]:
-                # http://docs.ros.org/en/jade/api/catkin/html/howto/format2/installing_python.html
-                # Convention is that ros python nodes are in nodes/ directory.
-                # All others are in scripts/. So just include python installs
-                # that are in nodes/
-                if program.startswith("nodes/"):
-                    name = Path(program).stem
-                    sources: set[Path] = set()
-                    source = self._resolve_to_real_file(program, self.package.path, cmake_env)
-                    if source:
-                        sources.add(source)
-                    logger.debug(f"Adding Python sources for {name}")
-                    self.executables[name] = CMakeTarget(name,
-                                                         SourceLanguage.PYTHON,
-                                                         sources,
-                                                         [],
-                                                         set(),
-                                                         cmakelists_file=cmake_env["cmakelists"],
-                                                         cmakelists_line=cmake_env["cmakelists_line"],
-                                                         )
+        for program in opts["PROGRAMS"]:
+            # http://docs.ros.org/en/jade/api/catkin/html/howto/format2/installing_python.html
+            # Convention is that ros python nodes are in nodes/ directory.
+            # All others are in scripts/. So just include python installs
+            # that are in nodes/
+            if not program.startswith("nodes/"):
+                return
+
+            name = Path(program).stem
+            sources: set[Path] = set()
+            if source := self._resolve_to_real_file(program, self.package.path, cmake_env):
+                sources.add(source)
+            logger.debug(f"Adding Python sources for {name}")
+            self.executables[name] = CMakeBinaryTarget(
+                name=name,
+                language=SourceLanguage.PYTHON,
+                sources=sources,
+                includes=[],
+                libraries=[],
+                restrict_to_paths=set(),
+                cmakelists_file=cmake_env["cmakelists"],
+                cmakelists_line=cmake_env["cmakelists_line"],
+            )

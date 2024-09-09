@@ -124,7 +124,6 @@ class CMakeInfo:
     unprocessed_commands: list[CommandInformation]
 
     def destroy(self) -> None:
-        print("destroying")
         self.targets.clear()
         self.unresolved_files.clear()
         self.unprocessed_commands.clear()

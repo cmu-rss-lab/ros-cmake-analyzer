@@ -232,7 +232,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             else:
                 append_to = args[1]
             cmake_env[args[0]] = append_to
-        elif isinstance(append_to, list) and args.length > 1:
+        elif isinstance(append_to, list) and len(args) > 1:
             append_to.append(args[1])
         else:
             logger.error(f"Don't know how to append_to append append_to type: {type(append_to)}")
@@ -269,6 +269,40 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         logger.debug(f"Set {args[0]} to {cmake_env[args[0]]}")
 
     @cmake_command
+    def get_filename_component(
+            self,
+            cmake_env: dict[str, str],
+            raw_args: list[str],
+    ) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"DIRECTORY": "-",
+             "NAME": "-",
+             "EXT": "-",
+             "NAME_WE": "-",
+             "LAST_EXT": "-",
+             "NAME_WLE": "-"},
+        )
+        file = args[1]
+        var_name = args[0]
+        if opts["DIRECTORY"]:
+            cmake_env[var_name] = str(Path(file).parent)
+        elif opts["NAME"]:
+            cmake_env[var_name] = Path(file).name
+        elif opts["EXT"]:
+            cmake_env[var_name] = "." + ".".join(Path(file).name.split(".")[1:])
+        elif opts["NAME_WE"]:
+            cmake_env[var_name] = Path(file).name.split(".")[0]
+        elif opts["LAST_EXT"]:
+            cmake_env[var_name] = Path(file).suffix
+        elif opts["NAME_WLE"]:
+            cmake_env[var_name] = Path(file).stem
+        else:
+            cmake_env[var_name] = file
+
+
+
+    @cmake_command
     def add_subdirectory(
             self,
             cmake_env: dict[str, str],
@@ -279,6 +313,9 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             {"EXCLUDE_FROM_ALL": "-"},
         )
         if opts["EXCLUDE_FROM_ALL"]:
+            return
+        if len(args) == 0 or (len(args) > 0 and args[0] == ""):
+            # Empty argument, just return
             return
         new_env = cmake_env.copy()
         new_env["cwd"] = str(Path(cmake_env.get("cwd", ".")) / args[0])

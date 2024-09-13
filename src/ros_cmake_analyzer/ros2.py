@@ -26,7 +26,9 @@ class ROS2CMakeExtractor(CMakeExtractor):
             msg = f"No `CMakeLists.txt' in {self.package.name}"
             raise ValueError(msg)
 
-        return self._info_from_cmakelists()
+        info = self._info_from_cmakelists()
+        self._hook_libraries_into_executables(info)
+        return info
 
     def _get_global_cmake_variables(self) -> dict[str, str]:
         dict_: dict[str, t.Any] = {

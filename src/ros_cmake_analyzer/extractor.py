@@ -10,7 +10,7 @@ from loguru import logger
 
 from .cmake_parser.parser import ParserContext
 from .cmake_parser.parser import argparse as cmake_argparse
-from .core.nodelets_xml import NodeletsInfo
+from .core.nodelets_xml import NodeletsInfo, NodeletLibrary
 from .core.package import Package
 from .decorator import aliased_cmake_command, TCMakeFunction, CommandHandlerType, cmake_command
 from .model import (
@@ -19,7 +19,6 @@ from .model import (
     CMakeLibraryTarget, CMakePluginReference, CMakeTarget, CommandInformation,
     FileInformation,
     IncompleteCMakeLibraryTarget,
-    NodeletLibrary,
     SourceLanguage,
 )
 from .utils import key_val_list_to_dict
@@ -159,7 +158,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                                                                      line))
                 # raise
         return CMakeInfo(Path(cmake_env["cmakelists"]), self.executables,
-                         plugin_references=self.plugin_references,
+                         plugin_references=tuple(self.plugin_references),
                          generated_sources=self._files_generated_by_cmake,
                          unprocessed_commands=self._commands_not_process,
                          unresolved_files=self._files_not_resolved)

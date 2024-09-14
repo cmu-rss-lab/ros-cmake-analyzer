@@ -1,4 +1,5 @@
 import typing as t
+from loguru import logger
 from pathlib import Path
 
 from ros_cmake_analyzer import CMakeExtractor
@@ -7,7 +8,7 @@ from ros_cmake_analyzer.decorator import (
     cmake_command,
 )
 from ros_cmake_analyzer.model import (
-    CMakeInfo,
+    CMakeBinaryTarget, CMakeInfo,
     DUMMY_VALUE, IncompleteCMakeLibraryTarget, SourceLanguage,
 )
 
@@ -62,6 +63,41 @@ class ROS2CMakeExtractor(CMakeExtractor):
             set(sources),
             [],
             self.package_paths(),
+            cmakelists_file=cmake_env["cmakelists"],
+            cmakelists_line=cmake_env["cmakelists_line"],
+        )
+
+    @cmake_command
+    def rclcpp_components_register_node(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(raw_args, {
+            "PLUGIN": "*",
+            "EXECUTABLE" : "*",
+            "RESOURCE_INDEX": "*",
+        })
+        if "PLUGIN" not in opts or "EXECUTABLE" not in opts:
+            logger.error("Need PLUGIN and EXECUTABLE arguments")
+            raise ValueError("Need PLUGIN and EXECUTABLE arguments")
+        self.executables[opts.get("EXECUTABLE")[0]] = CMakeBinaryTarget(
+            name=opts.get("EXECUTABLE")[0],
+            language=SourceLanguage.CXX,
+            sources=set(opts.get("PLUGIN")),
+            includes=cmake_env["INCLUDE_DIRECTORIES"].split(" ") if "INCLUDE_DIRECTORIES" in cmake_env else [],
+            libraries=[],
+            restrict_to_paths=self.package_paths(),
+            cmakelists_file=cmake_env["cmakelists"],
+            cmakelists_line=cmake_env["cmakelists_line"],
+        )
+
+    @cmake_command
+    def rclcpp_components_register_nodes(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(raw_args, {"RESOURCE_INDEX": "*"})
+        self.executables[args[0]] = CMakeBinaryTarget(
+            name=args[0],
+            language=SourceLanguage.CXX,
+            sources=set(args[1:]),
+            includes=cmake_env["INCLUDE_DIRECTORIES"].split(" ") if "INCLUDE_DIRECTORIES" in cmake_env else [],
+            libraries=[],
+            restrict_to_paths=self.package_paths(),
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=cmake_env["cmakelists_line"],
         )

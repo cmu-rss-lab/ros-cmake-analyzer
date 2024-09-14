@@ -179,8 +179,11 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             if var_match:
                 args[0] = var_match.group(1) + cmake_env[var_match.group(2)] + var_match.group(3)
             if args[0] in self.executables:
-                self.executables[properties["OUTPUT_NAME"]] = self.executables[args[0]]
-                del self.executables[args[0]]
+                object.__setattr__(self.executables[args[0]], "name", properties["OUTPUT_NAME"])
+                logger.info(f"Changed the name of the executable to {properties["OUTPUT_NAME"]}")
+                # self.executables[args[0]].name = properties["OUTPUT_NAME"]
+                # self.executables[properties["OUTPUT_NAME"]] = self.executables[args[0]]
+                # del self.executables[args[0]]
             else:
                 logger.error(f"{args[0]} is not in the list of targets")
 

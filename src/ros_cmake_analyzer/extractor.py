@@ -330,6 +330,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             contents = f.read()
         sub_cmake = self.__class__(self.package.path)
         included_pacakge_instances = sub_cmake._process_cmake_contents(contents, new_env)
+        self.libraries_for.update(sub_cmake.libraries_for)
         self.executables.update(
             **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets})
 

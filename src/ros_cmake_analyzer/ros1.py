@@ -4,7 +4,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from .decorator import cmake_command
+from .decorator import aliased_cmake_command, cmake_command
 from .extractor import CMakeExtractor
 from .model import (
     CMakeBinaryTarget,
@@ -13,6 +13,7 @@ from .model import (
     IncompleteCMakeLibraryTarget,
     SourceLanguage,
 )
+from .utils import has_python_shebang
 
 
 class ROS1CMakeExtractor(CMakeExtractor):
@@ -115,24 +116,29 @@ class ROS1CMakeExtractor(CMakeExtractor):
             workspace_path = workspace_path.parent
         return workspace_path
 
-    @cmake_command
-    def catkin_install_python(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
-        opts, args = self._cmake_argparse(
-            raw_args,
-            {"PROGRAMS": "*", "DESTINATION": "*"},
-        )  # type: ignore
-        if "PROGRAMS" not in opts:
-            raise ValueError("PROGRAMS not specifie in catkin_install_python")
-
-        for program in opts["PROGRAMS"]:
+    def _install(
+         self,
+        cmake_env: dict[str, t.Any],
+        programs: list[str],
+        *,
+        check_python: bool = False,
+        destination: Path | None = None,
+    ) -> None:
+        for program in programs:
             # http://docs.ros.org/en/jade/api/catkin/html/howto/format2/installing_python.html
             # Convention is that ros python nodes are in nodes/ directory.
             # All others are in scripts/. So just include python installs
             # that are in nodes/
-            if not program.startswith("nodes/"):
-                return
-
-            name = Path(program).stem
+            # Despite this, nodes still seem to be appearing in scripts/ directory
+            # if not program.startswith("nodes/"):
+            #     return
+            program_path = Path(program)
+            is_python = True
+            if check_python and program_path.suffix != "py" and not has_python_shebang(program_path):
+                is_python = False
+            if not is_python:
+                continue
+            name = program_path.stem
             sources: set[Path] = set()
             if source := self._resolve_to_real_file(program, self.package.path, cmake_env):
                 sources.add(source)
@@ -147,3 +153,22 @@ class ROS1CMakeExtractor(CMakeExtractor):
                 cmakelists_file=cmake_env["cmakelists"],
                 cmakelists_line=cmake_env["cmakelists_line"],
             )
+
+    @cmake_command
+    def catkin_install_python(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"PROGRAMS": "*", "DESTINATION": "*"},
+        )  # type: ignore
+        if "PROGRAMS" not in opts:
+            raise ValueError("PROGRAMS not specifie in catkin_install_python")
+        self._install(cmake_env, opts["PROGRAMS"], check_python=False)
+
+    @cmake_command
+    def install(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"PROGRAMS": "*", "DESTINATION": "*", "DIRECTORY": "*"},
+        )  # type: ignore
+        if "PROGRAMS" in opts:
+            self._install(cmake_env, opts["PROGRAMS"], check_python=True)

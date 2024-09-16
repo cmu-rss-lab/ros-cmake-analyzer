@@ -24,7 +24,9 @@ class FileInformation:
 
 @dataclass(frozen=True)
 class CommandInformation:
-    command: list[str]
+    command: str
+    args: list[str]
+    reason: str
     cmake_file: Path
     cmake_line_no: int
 

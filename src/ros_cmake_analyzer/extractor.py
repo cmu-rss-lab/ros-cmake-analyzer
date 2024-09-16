@@ -147,16 +147,19 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                 if command:
                     command(self, cmake_env, raw_args)
                 else:
-                    self._commands_not_process.append(CommandInformation([cmd, raw_args],
+                    self._commands_not_process.append(CommandInformation(cmd,
+                                                                         raw_args,
+                                                                         "Command not handled",
                                                                          Path(cmake_env["cmakelists"]),
-                                                                         line))
-            except BaseException:  # noqa:BLE001  Don't want to crash, just want to report
+                                                                         int(line)))
+            except BaseException as e:  # noqa:BLE001  Don't want to crash, just want to report
                 logger.error(f"Error processing {cmd}({raw_args}) in "
                              f"{cmake_env['cmakelists'] if 'cmakelists' in cmake_env else 'unknown'}:{line}")
-                self._commands_not_process.append(CommandInformation([cmd, raw_args],
+                self._commands_not_process.append(CommandInformation(cmd,
+                                                                     raw_args,
+                                                                     str(e),
                                                                      Path(cmake_env["cmakelists"]),
-                                                                     line))
-                # raise
+                                                                     int(line)))
         return CMakeInfo(Path(cmake_env["cmakelists"]), self.executables,
                          plugin_references=tuple(self.plugin_references),
                          generated_sources=self._files_generated_by_cmake,

@@ -360,8 +360,15 @@ class ParserContext:
                         self._skip_block = False
             elif cmdname_lower in self.callable:
                 f = self.callable[cmdname_lower]
-                if skip_callable or f.new_context:
-                    yield (cmdname, args, cmd.args, (cmd.filename, cmd.line, cmd.column))
+                if not skip_callable:
+                    if f.new_context:
+                        new_context = ParserContext(self)
+                        for cmd, args, arg_tokens, loc in new_context._call(cmdname, args, var, env_var, skip_callable):
+                            yield (cmd, args, arg_tokens, loc)
+                            if new_context._skip_block:
+                                break
+                    else:
+                        yield (cmdname, args, cmd.args, (cmd.filename, cmd.line, cmd.column))
                 elif not self._skip_block:
                     for cmd, args, arg_tokens, loc in self._call(cmdname, args, var, env_var, skip_callable):
                         yield (cmd, args, arg_tokens, loc)

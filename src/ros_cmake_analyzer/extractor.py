@@ -400,7 +400,16 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             cmake_env["INCLUDE_DIRECTORIES"] = " ".join(
                 cmake_env["INCLUDE_DIRECTORIES"].split(" ") + paths_to_include)
 
-    @aliased_cmake_command("add_library", "cuda_add_library")  # type: ignore
+    @aliased_cmake_command("add_library", "cuda_add_library",
+                           "dart_add_library", "ogre_add_library", "rs_add_library",
+                           "ecal_add_library", "oradar_add_library", "python_add_library",
+                           "mola_add_library", "c4_add_library", "ros_add_library",
+                           "mrt_add_library", "sdf_add_library", "jderobot_add_library",
+                           "swig_add_library", "cisst_add_library", "wombat_add_library",
+                           "iox_add_library", "lcm_add_library", "selfdriving_add_library",
+                           "ament_auto_add_library", "ament_dub_add_executable",
+                           "df_add_library", "cs_add_library", "python3_add_library",
+                           "gz_add_library", "ament_dub_add_library", "px4_add_library")  # type: ignore
     def add_library(
             self,
             cmake_env: dict[str, t.Any],

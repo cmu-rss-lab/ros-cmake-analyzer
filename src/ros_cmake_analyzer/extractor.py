@@ -112,6 +112,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             self,
             file_contents: str,
             cmake_env: dict[str, str],
+            parent: ParserContext | None = None,
     ) -> CMakeInfo:
         """Processes the contents of a CMakeLists.txt file.
 
@@ -133,7 +134,8 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             Information about the targets in CMakeLists.txt
 
         """
-        pc = ParserContext()
+        pc = ParserContext(parent)
+        self.parser_context = pc
         context = pc.parse(file_contents, skip_callable=False, var=cmake_env)
         self.executables: dict[str, CMakeTarget] = {}
         self.libraries: dict[str, CMakeTarget] = {}
@@ -155,6 +157,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             except BaseException as e:  # noqa:BLE001  Don't want to crash, just want to report
                 logger.error(f"Error processing {cmd}({raw_args}) in "
                              f"{cmake_env['cmakelists'] if 'cmakelists' in cmake_env else 'unknown'}:{line}")
+                # print(traceback.format_exc())
                 self._commands_not_process.append(CommandInformation(cmd,
                                                                      raw_args,
                                                                      str(e),
@@ -332,12 +335,12 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         with cmakelists_path.open() as f:
             contents = f.read()
         sub_cmake = self.__class__(self.package.path)
-        included_pacakge_instances = sub_cmake._process_cmake_contents(contents, new_env)
+        included_pacakge_instances = sub_cmake._process_cmake_contents(contents, new_env, self.parser_context)
         self.libraries_for.update(sub_cmake.libraries_for)
         self.executables.update(
             **{s: included_pacakge_instances.targets[s] for s in included_pacakge_instances.targets})
 
-    @aliased_cmake_command("add_executable", "cuda_add_executable")
+    @aliased_cmake_command("add_executable", "cuda_add_executable", "add_node")
     def add_executable(
             self,
             cmake_env: dict[str, t.Any],
@@ -375,6 +378,9 @@ class CMakeExtractor(metaclass=CommandHandlerType):
     @cmake_command
     def target_link_libraries(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
         opts, args = self._cmake_argparse(raw_args, {})
+        if len(args) < 2:
+            logger.warning(f"target_link_libraries({raw_args}) has too few arguments")
+            return
         executable = args[0]
         libraries = args[1:]
         self.libraries_for[executable] = self.libraries_for.get(executable, []) + libraries

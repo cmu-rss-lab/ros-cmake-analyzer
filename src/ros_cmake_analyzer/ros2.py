@@ -101,3 +101,28 @@ class ROS2CMakeExtractor(CMakeExtractor):
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=cmake_env["cmakelists_line"],
         )
+
+    @cmake_command
+    def ament_create_node(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(raw_args, {})
+        name = args[0]
+        sources: set[Path] = set()
+        for source in args[1:]:
+            if source in self.executables:
+                sources.update(self.executables[source].sources)
+            else:
+                real_src = self._resolve_to_real_file(source, self.package.path, cmake_env)
+                if real_src:
+                    sources.add(real_src)
+                else:
+                    logger.warning(f"'{source} did not resolve to a real file.")
+        self.executables[args[0]] = CMakeBinaryTarget(
+            name=name,
+            language=SourceLanguage.CXX,
+            sources=sources,
+            includes=cmake_env["INCLUDE_DIRECTORIES"].split(" ") if "INCLUDE_DIRECTORIES" in cmake_env else [],
+            libraries=[],
+            restrict_to_paths=self.package_paths(),
+            cmakelists_file=cmake_env["cmakelists"],
+            cmakelists_line=cmake_env["cmakelists_line"],
+        )

@@ -434,6 +434,9 @@ class CMakeExtractor(metaclass=CommandHandlerType):
         name = args[0]
         sources: set[Path] = set()
         for source in args[1:]:
+            if source.startswith("-"):
+                # This is a compiler flag
+                continue
             if source in self.executables:
                 sources.update(self.executables[source].sources)
             else:

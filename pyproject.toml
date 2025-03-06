@@ -1,31 +1,44 @@
-[tool.poetry]
+[project]
 name = "ros-cmake-analyzer"
 version = "0.1.0"
 description = "A static analysis tool for CMakeLists.txt files in ROS packages."
 authors = [
-    "Chris Timperley <christimperley@googlemail.com>",
-    "Bradley Schmerl <schmerl@cs.cmu.edu>"]
+    { name = "Chris Timperley", email = "christimperley@googlemail.com" },
+    { name = "Bradley Schmerl", email = "schmerl@cs.cmu.edu" },
+]
+requires-python = "~=3.10"
 readme = "README.md"
-packages = [
-    {include = "ros_cmake_analyzer", from="src"}
+dependencies = [
+    "flake8-comprehensions>=3.14.0,<4",
+    "flake8-use-fstring~=1.4",
+    "loguru>=0.7.2,<0.8",
+    "pyparsing>=3.1.1,<4",
+    "defusedxml>=0.7.1,<0.8",
+    "charset-normalizer==3.3.2",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-flake8-comprehensions = "^3.14.0"
-flake8-use-fstring = "^1.4"
-loguru = "^0.7.2"
-pyparsing = "^3.1.1"
-defusedxml = "^0.7.1"
-charset-normalizer = "3.3.2"
+[dependency-groups]
+dev = [
+    "mypy>=1.7.0,<2",
+    "pytest>=7.4.3,<8",
+    "pytest-cov>=4.1.0,<5",
+    "ruff>=0.1.6,<0.2",
+    "nox>=2023.4.22,<2024",
+    "types-defusedxml==0.7.0.20240218",
+]
 
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.7.0"
-pytest = "^7.4.3"
-pytest-cov = "^4.1.0"
-ruff = "^0.1.6"
-nox = "^2023.4.22"
-types-defusedxml = "0.7.0.20240218"
+[tool.hatch.build.targets.sdist]
+include = ["src/ros_cmake_analyzer"]
+
+[tool.hatch.build.targets.wheel]
+include = ["src/ros_cmake_analyzer"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/ros_cmake_analyzer" = "ros_cmake_analyzer"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.mypy]
 ignore_missing_imports = false
@@ -40,6 +53,7 @@ ignore_missing_imports = true
 line-length = 120
 target-version = "py312"
 src = ["src"]
+
 [tool.ruff.lint]
 select = [
     "ALL",  # includes all rules (including new ones)
@@ -85,7 +99,3 @@ extend-ignore = [
     "EM101",    # Exception must not use a string literal, assign to variable first
     "EM102",    # Exception must not use an f-string literal, assign to variable first
 ]
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"

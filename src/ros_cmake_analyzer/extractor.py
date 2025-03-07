@@ -21,7 +21,7 @@ from .model import (
     IncompleteCMakeLibraryTarget,
     SourceLanguage,
 )
-from .utils import key_val_list_to_dict
+from .utils import has_python_shebang, key_val_list_to_dict
 
 __all__ = ("CMakeExtractor",)
 
@@ -186,7 +186,7 @@ class CMakeExtractor(metaclass=CommandHandlerType):
                 args[0] = var_match.group(1) + cmake_env[var_match.group(2)] + var_match.group(3)
             if args[0] in self.executables:
                 object.__setattr__(self.executables[args[0]], "name", properties["OUTPUT_NAME"])
-                logger.info(f"Changed the name of the executable to {properties["OUTPUT_NAME"]}")
+                logger.info(f"Changed the name of the executable to {properties['OUTPUT_NAME']}")
                 # self.executables[args[0]].name = properties["OUTPUT_NAME"]
                 # self.executables[properties["OUTPUT_NAME"]] = self.executables[args[0]]
                 # del self.executables[args[0]]
@@ -531,3 +531,56 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             cmakelists_file=cmake_env["cmakelists"],
             cmakelists_line=int(cmake_env["cmakelists_line"])
         ))
+
+    def _install(
+         self,
+        cmake_env: dict[str, t.Any],
+        programs: list[str],
+        *,
+        check_python: bool = False,
+        destination: Path | None = None,
+        rename: str | None = None,
+    ) -> None:
+        for program in programs:
+            # http://docs.ros.org/en/jade/api/catkin/html/howto/format2/installing_python.html
+            # Convention is that ros python nodes are in nodes/ directory.
+            # All others are in scripts/. So just include python installs
+            # that are in nodes/
+            # Despite this, nodes still seem to be appearing in scripts/ directory
+            # if not program.startswith("nodes/"):
+            #     return
+            program_path = Path(program)
+            is_python = True
+            if check_python and program_path.suffix != ".py" and not has_python_shebang(program_path):
+                is_python = False
+            if not is_python:
+                continue
+            name = rename if rename else program_path.name
+            sources: set[Path] = set()
+            if source := self._resolve_to_real_file(program, self.package.path, cmake_env):
+                sources.add(source)
+            logger.debug(f"Adding Python sources for {name}")
+            self.executables[name] = CMakeBinaryTarget(
+                name=name,
+                language=SourceLanguage.PYTHON,
+                sources=sources,
+                includes=[],
+                libraries=[],
+                restrict_to_paths=set(),
+                cmakelists_file=cmake_env["cmakelists"],
+                cmakelists_line=cmake_env["cmakelists_line"],
+            )
+
+    @cmake_command
+    def install(self, cmake_env: dict[str, t.Any], raw_args: list[str]) -> None:
+        opts, args = self._cmake_argparse(
+            raw_args,
+            {"PROGRAMS": "*", "DESTINATION": "*", "DIRECTORY": "*", "RENAME": "?"},
+        )  # type: ignore
+        if "PROGRAMS" in opts:
+            if opts.get("RENAME", None):
+                if len(opts["PROGRAMS"]) != 1:
+                    raise ValueError("RENAME specified with more than one PROGRAM")
+                self._install(cmake_env, opts["PROGRAMS"], check_python=True, rename=opts.get("RENAME", None))
+            else:
+                self._install(cmake_env, opts["PROGRAMS"], check_python=True)

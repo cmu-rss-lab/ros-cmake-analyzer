@@ -551,8 +551,13 @@ class CMakeExtractor(metaclass=CommandHandlerType):
             #     return
             program_path = Path(program)
             is_python = True
-            if check_python and program_path.suffix != ".py" and not has_python_shebang(program_path):
-                is_python = False
+            if check_python:
+                if program_path.suffix == ".py":
+                    is_python = True
+                elif has_python_shebang(Path(cmake_env['cmakelists']).parent / program_path):
+                    is_python = True
+                else:
+                    is_python = False
             if not is_python:
                 continue
             name = rename if rename else program_path.name
